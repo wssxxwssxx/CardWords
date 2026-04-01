@@ -1,0 +1,178 @@
+CREATE TABLE word (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    original TEXT NOT NULL,
+    translation TEXT NOT NULL,
+    transcription TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    is_in_dictionary INTEGER NOT NULL DEFAULT 0,
+    added_at INTEGER,
+    source TEXT NOT NULL DEFAULT 'hardcoded'
+);
+
+CREATE INDEX idx_word_is_in_dictionary ON word(is_in_dictionary);
+CREATE INDEX idx_word_original ON word(original);
+
+getAllWords:
+SELECT * FROM word;
+
+getWordById:
+SELECT * FROM word WHERE id = ?;
+
+getDictionaryWords:
+SELECT * FROM word WHERE is_in_dictionary = 1 ORDER BY added_at DESC;
+
+getWordCount:
+SELECT COUNT(*) FROM word WHERE is_in_dictionary = 1;
+
+getAllWordCount:
+SELECT COUNT(*) FROM word;
+
+searchWords:
+SELECT * FROM word WHERE original LIKE ? OR translation LIKE ?;
+
+searchDictionaryWords:
+SELECT * FROM word WHERE is_in_dictionary = 1 AND (original LIKE ? OR translation LIKE ?);
+
+addToDictionary:
+UPDATE word SET is_in_dictionary = 1, added_at = ? WHERE id = ?;
+
+removeFromDictionary:
+UPDATE word SET is_in_dictionary = 0, added_at = NULL WHERE id = ?;
+
+insertWord:
+INSERT INTO word (original, translation, transcription, category, is_in_dictionary, added_at, source)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+findByOriginal:
+SELECT * FROM word WHERE original = ? COLLATE NOCASE LIMIT 1;
+
+getWordsNotInDictionary:
+SELECT * FROM word WHERE is_in_dictionary = 0;
+
+getWordCountBySource:
+SELECT COUNT(*) FROM word WHERE source = ?;
+
+getDictionaryWordCountBySource:
+SELECT COUNT(*) FROM word WHERE source = ? AND is_in_dictionary = 1;
+
+getWordsBySource:
+SELECT * FROM word WHERE source = ?;
+
+getDictionaryWordsBySource:
+SELECT * FROM word WHERE is_in_dictionary = 1 AND source = ? ORDER BY added_at DESC;
+
+-- ========== Word Progress ==========
+
+CREATE TABLE word_progress (
+    word_id INTEGER NOT NULL,
+    mode TEXT NOT NULL,
+    correct_count INTEGER NOT NULL DEFAULT 0,
+    total_count INTEGER NOT NULL DEFAULT 0,
+    mastery_level INTEGER NOT NULL DEFAULT 0,
+    last_studied_at INTEGER NOT NULL DEFAULT 0,
+    next_review_at INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (word_id, mode)
+);
+
+CREATE INDEX idx_wp_next_review ON word_progress(next_review_at);
+CREATE INDEX idx_wp_mastery ON word_progress(mastery_level);
+
+upsertWordProgress:
+INSERT OR REPLACE INTO word_progress (word_id, mode, correct_count, total_count, mastery_level, last_studied_at, next_review_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+getWordProgressByMode:
+SELECT * FROM word_progress WHERE word_id = ? AND mode = ?;
+
+getAllProgressForWord:
+SELECT * FROM word_progress WHERE word_id = ?;
+
+getWordsNeedingReview:
+SELECT * FROM word_progress WHERE next_review_at <= ? AND next_review_at > 0 ORDER BY next_review_at ASC;
+
+getProgressByMasteryLevel:
+SELECT wp.mastery_level, COUNT(*) AS cnt FROM word_progress wp INNER JOIN word w ON wp.word_id = w.id WHERE w.is_in_dictionary = 1 GROUP BY wp.mastery_level;
+
+getAllWordProgress:
+SELECT * FROM word_progress;
+
+getMinMasteryPerWord:
+SELECT wp.word_id, MIN(wp.mastery_level) AS min_level FROM word_progress wp INNER JOIN word w ON wp.word_id = w.id WHERE w.is_in_dictionary = 1 GROUP BY wp.word_id;
+
+-- ========== Study Session ==========
+
+CREATE TABLE study_session (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at INTEGER NOT NULL,
+    finished_at INTEGER NOT NULL,
+    correct_count INTEGER NOT NULL,
+    total_count INTEGER NOT NULL,
+    modes_used TEXT NOT NULL DEFAULT '',
+    word_source TEXT NOT NULL DEFAULT ''
+);
+
+insertStudySession:
+INSERT INTO study_session (started_at, finished_at, correct_count, total_count, modes_used, word_source)
+VALUES (?, ?, ?, ?, ?, ?);
+
+getRecentSessions:
+SELECT * FROM study_session ORDER BY finished_at DESC LIMIT ?;
+
+getSessionCount:
+SELECT COUNT(*) FROM study_session;
+
+-- ========== Daily Activity ==========
+
+CREATE TABLE daily_activity (
+    date TEXT NOT NULL PRIMARY KEY,
+    words_studied INTEGER NOT NULL DEFAULT 0,
+    sessions_count INTEGER NOT NULL DEFAULT 0,
+    correct_count INTEGER NOT NULL DEFAULT 0,
+    total_count INTEGER NOT NULL DEFAULT 0
+);
+
+insertDailyActivity:
+INSERT OR REPLACE INTO daily_activity (date, words_studied, sessions_count, correct_count, total_count)
+VALUES (?, ?, ?, ?, ?);
+
+getDailyActivity:
+SELECT * FROM daily_activity WHERE date = ?;
+
+getDailyActivityRange:
+SELECT * FROM daily_activity WHERE date >= ? AND date <= ? ORDER BY date ASC;
+
+getAllDailyActivity:
+SELECT * FROM daily_activity ORDER BY date DESC;
+
+-- ========== Achievements ==========
+
+CREATE TABLE achievement (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL UNIQUE,
+    unlocked_at INTEGER NOT NULL
+);
+
+insertAchievement:
+INSERT OR IGNORE INTO achievement (type, unlocked_at) VALUES (?, ?);
+
+getAchievement:
+SELECT * FROM achievement WHERE type = ?;
+
+getAllAchievements:
+SELECT * FROM achievement ORDER BY unlocked_at DESC;
+
+-- ========== User Settings ==========
+
+CREATE TABLE user_settings (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+);
+
+getSetting:
+SELECT value FROM user_settings WHERE key = ?;
+
+setSetting:
+INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?);
+
+deleteSetting:
+DELETE FROM user_settings WHERE key = ?;
