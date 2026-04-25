@@ -353,6 +353,18 @@ class SqlDelightDatabaseRepository(
         queries.setSetting(key, value)
     }
 
+    // --- Data Isolation ---
+
+    override fun clearAllUserData() {
+        queries.clearAllWords()
+        queries.clearAllWordProgress()
+        queries.clearAllStudySessions()
+        queries.clearAllDailyActivity()
+        queries.clearAllAchievements()
+        queries.clearAllSettings()
+        _wordCountTrigger.value = 0L
+    }
+
     // --- Mappers ---
 
     private fun com.example.cardwords.db.Word.toWord(): Word {

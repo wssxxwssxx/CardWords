@@ -101,16 +101,17 @@ object DungeonGameEngine {
         card: DungeonCard,
     ): DungeonUiState {
         // Category combo
+        val relicEffects = state.relics.mapTo(HashSet()) { it.effect }
         val sameCategory = card.word.category.isNotEmpty() && card.word.category == combat.lastCategory
         val comboCount = if (sameCategory) combat.categoryComboCount + 1 else 1
-        val comboThreshold = if (state.relics.any { it.effect == RelicEffect.COMBO_MASTER }) {
+        val comboThreshold = if (RelicEffect.COMBO_MASTER in relicEffects) {
             DungeonConstants.COMBO_THRESHOLD_MASTER
         } else {
             DungeonConstants.COMBO_THRESHOLD
         }
 
         val isCombo = comboCount >= comboThreshold
-        val powerBoost = if (state.relics.any { it.effect == RelicEffect.POWER_BOOST }) 2 else 0
+        val powerBoost = if (RelicEffect.POWER_BOOST in relicEffects) 2 else 0
         val baseDamage = card.power + powerBoost
         val damage = if (isCombo) baseDamage * DungeonConstants.COMBO_MULTIPLIER else baseDamage
         val newComboCount = if (isCombo) 0 else comboCount

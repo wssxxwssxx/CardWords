@@ -1,6 +1,7 @@
 package com.example.cardwords.ui.packs
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.cardwords.data.model.PackWord
 import com.example.cardwords.data.model.Word
 import com.example.cardwords.data.model.WordPack
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 data class PackWordItem(
     val packWord: PackWord,
@@ -31,6 +33,8 @@ data class PackDetailUiState(
 class PackDetailViewModel(packId: String) : ViewModel() {
 
     private val repository = AppModule.databaseRepository
+    private val apiClient = AppModule.cardWordsApiClient
+    private val authManager = AppModule.authManager
 
     private val _uiState = MutableStateFlow(PackDetailUiState())
     val uiState: StateFlow<PackDetailUiState> = _uiState.asStateFlow()
@@ -91,6 +95,26 @@ class PackDetailViewModel(packId: String) : ViewModel() {
 
         _uiState.update { it.copy(isInstalling = false, installComplete = true) }
         loadWords(pack)
+
+        // Sync to server
+        syncWordsToServer(pack.words)
+    }
+
+    private fun syncWordsToServer(words: List<PackWord>) {
+        val token = authManager.getToken() ?: return
+        // Use app-level scope — server sync must survive navigation away.
+        AppModule.syncScope.launch {
+            val existingOriginals = apiClient.getCards(token).getOrNull()
+                ?.map { it.wordOriginal.lowercase().trim() }
+                ?.toSet()
+                ?: emptySet()
+
+            words.forEach { pw ->
+                val key = pw.original.lowercase().trim()
+                if (key in existingOriginals) return@forEach
+                apiClient.createCard(token, pw.original, pw.translation)
+            }
+        }
     }
 
     fun addSingleWord(packWord: PackWord) {
@@ -120,6 +144,16 @@ class PackDetailViewModel(packId: String) : ViewModel() {
         }
 
         loadWords(pack)
+
+        // Sync single word to server (skip if already exists there)
+        val token = authManager.getToken()
+        if (token != null) {
+            AppModule.syncScope.launch {
+                val checkResult = apiClient.checkWord(token, packWord.original).getOrNull()
+                if (checkResult?.exists == true) return@launch
+                apiClient.createCard(token, packWord.original, packWord.translation)
+            }
+        }
     }
 
     private fun loadWords(pack: WordPack) {

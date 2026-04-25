@@ -1,5 +1,6 @@
 package com.example.cardwords.ui.study.mixed
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import com.example.cardwords.data.model.AchievementChecker
 import com.example.cardwords.data.model.AchievementType
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+@Immutable
 data class MixedQuestion(
     val word: Word,
     val mode: StudyMode,
@@ -28,6 +30,7 @@ data class MixedQuestion(
     val mcCorrectIndex: Int = -1,
 )
 
+@Immutable
 data class LetterTile(
     val id: Int,
     val char: Char,
@@ -36,6 +39,7 @@ data class LetterTile(
     val scrambleIndex: Int,
 )
 
+@Immutable
 sealed interface MixedAnswerState {
     data object Unanswered : MixedAnswerState
     data class McAnswered(val selectedIndex: Int, val isCorrect: Boolean) : MixedAnswerState
@@ -45,6 +49,7 @@ sealed interface MixedAnswerState {
     data class AssemblyIncorrect(val assembledWord: String, val correctAnswer: String) : MixedAnswerState
 }
 
+@Immutable
 data class MixedStudyUiState(
     val questions: List<MixedQuestion> = emptyList(),
     val currentIndex: Int = 0,
@@ -121,7 +126,7 @@ class MixedStudyViewModel(
                 if (flashcard) add(StudyMode.FLASHCARD)
                 if (typing) add(StudyMode.TYPING)
                 if (letterAssembly) add(StudyMode.LETTER_ASSEMBLY)
-            }
+            }.ifEmpty { listOf(StudyMode.MULTIPLE_CHOICE) }
 
             val shuffledWords = dictionaryWords.shuffled()
             val allOriginals = repository.getAllWords().map { it.original }

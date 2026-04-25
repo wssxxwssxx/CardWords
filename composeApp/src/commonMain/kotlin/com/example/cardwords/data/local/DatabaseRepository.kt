@@ -59,4 +59,7 @@ interface DatabaseRepository {
     fun setSetting(key: String, value: String)
     fun getSettingOrDefault(key: String, default: String): String =
         getSetting(key) ?: default
+
+    // --- Data Isolation ---
+    fun clearAllUserData()
 }

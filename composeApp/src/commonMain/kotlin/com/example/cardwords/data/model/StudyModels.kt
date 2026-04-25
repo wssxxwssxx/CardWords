@@ -1,7 +1,9 @@
 package com.example.cardwords.data.model
 
+import androidx.compose.runtime.Immutable
 import com.example.cardwords.ui.study.StudyMode
 
+@Immutable
 data class WordProgress(
     val wordId: Long,
     val mode: StudyMode,
@@ -46,7 +48,7 @@ object MasteryLevels {
         FAMILIAR -> "Знакомое"
         LEARNING -> "Учу"
         KNOWN -> "Знаю"
-        MASTERED -> "Освоено"
+        MASTERED -> "Выучено"
         else -> "?"
     }
 

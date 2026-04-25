@@ -1,5 +1,8 @@
 package com.example.cardwords.data.model
 
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class Word(
     val id: Long,
     val original: String,

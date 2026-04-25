@@ -45,10 +45,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cardwords.data.model.Word
-import com.example.cardwords.data.remote.FetchedWordResult
+import com.example.cardwords.data.remote.CardResponse
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,9 +69,18 @@ fun WordSelectionScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
+                navigationIcon = {
+                    androidx.compose.material3.IconButton(onClick = onNavigateBack) {
+                        Text(
+                            text = "\u2190",
+                            fontSize = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
                 ),
             )
         },
@@ -164,8 +174,8 @@ fun WordSelectionScreen(
             if (apiResult is ApiSearchResult.Found) {
                 item {
                     ApiWordCard(
-                        word = apiResult.word,
-                        onAdd = { viewModel.addApiWord(apiResult.word) },
+                        card = apiResult.card,
+                        onAdd = { viewModel.addApiWord(apiResult.card) },
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -232,10 +242,7 @@ fun WordSelectionScreen(
 }
 
 @Composable
-private fun ApiWordCard(
-    word: FetchedWordResult,
-    onAdd: () -> Unit,
-) {
+private fun ApiWordCard(card: CardResponse, onAdd: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -252,24 +259,17 @@ private fun ApiWordCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = word.original,
+                    text = card.wordOriginal,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = word.translation,
+                    text = card.wordTranslation,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
                 )
-                if (word.transcription.isNotBlank()) {
-                    Text(
-                        text = word.transcription,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.6f),
-                    )
-                }
             }
             Button(
                 onClick = onAdd,

@@ -228,4 +228,19 @@ class InMemoryDatabaseRepository(
     override fun setSetting(key: String, value: String) {
         settingsMap[key] = value
     }
+
+    // --- Data Isolation ---
+
+    override fun clearAllUserData() {
+        words.clear()
+        nextId = 1L
+        wordProgressMap.clear()
+        sessions.clear()
+        nextSessionId = 1L
+        dailyActivityMap.clear()
+        achievementMap.clear()
+        nextAchievementId = 1L
+        settingsMap.clear()
+        _wordCountTrigger.value = 0L
+    }
 }

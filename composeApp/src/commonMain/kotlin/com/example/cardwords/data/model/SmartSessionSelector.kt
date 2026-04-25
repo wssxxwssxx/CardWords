@@ -13,44 +13,39 @@ object SmartSessionSelector {
         repository: DatabaseRepository,
         maxWords: Int = 20,
     ): SmartSessionResult {
-        val now = repository.currentTimeMillis()
         val dictionaryWords = repository.getDictionaryWords()
         if (dictionaryWords.isEmpty()) {
-            return SmartSessionResult(wordIds = emptyList(), hasWords = false)
+            return SmartSessionResult(emptyList(), hasWords = false)
         }
 
-        val dictionaryWordIds = dictionaryWords.map { it.id }.toSet()
+        val dictionaryWordIds = dictionaryWords.mapTo(HashSet()) { it.id }
+        val now = repository.currentTimeMillis()
 
-        // 1. Words needing review (scheduled review time has passed)
-        // Filter by dictionary — getWordsNeedingReview() returns ALL word_progress rows
+        // 1. Words needing review — filter to dictionary words only
         val reviewWordIds = repository.getWordsNeedingReview(now)
-            .map { it.wordId }
-            .filter { it in dictionaryWordIds }
+            .mapNotNull { wp -> wp.wordId.takeIf { it in dictionaryWordIds } }
             .distinct()
 
-        // 2. New words (in dictionary but never studied in any mode)
-        val wordsWithProgress = repository.getAllWordProgress()
-            .map { it.wordId }
-            .toSet()
+        // 2. New words (never studied)
+        val studiedWordIds = repository.getAllWordProgress()
+            .mapTo(HashSet()) { it.wordId }
         val newWordIds = dictionaryWords
-            .filter { it.id !in wordsWithProgress }
+            .filter { it.id !in studiedWordIds }
             .map { it.id }
 
-        // 3. Low-mastery words (below LEARNING threshold), dictionary only
-        val minMasteryPerWord = repository.getMinMasteryPerWord()
-        val lowMasteryIds = minMasteryPerWord
-            .filter { it.key in dictionaryWordIds && it.value < MasteryLevels.LEARNING }
+        // 3. Low-mastery words
+        val lowMasteryIds = repository.getMinMasteryPerWord()
+            .filter { (id, level) -> id in dictionaryWordIds && level < MasteryLevels.LEARNING }
             .keys
-            .toList()
 
-        // Combine with priority: review first, then new, then low mastery
-        val smartIds = (reviewWordIds + newWordIds + lowMasteryIds)
-            .distinct()
-            .take(maxWords)
+        // Combine: review → new → low mastery, deduplicated
+        val seen = HashSet<Long>(maxWords)
+        val smartIds = buildList(maxWords) {
+            for (id in reviewWordIds) if (seen.add(id) && size < maxWords) add(id)
+            for (id in newWordIds) if (seen.add(id) && size < maxWords) add(id)
+            for (id in lowMasteryIds) if (seen.add(id) && size < maxWords) add(id)
+        }
 
-        return SmartSessionResult(
-            wordIds = smartIds,
-            hasWords = smartIds.isNotEmpty(),
-        )
+        return SmartSessionResult(smartIds, hasWords = smartIds.isNotEmpty())
     }
 }

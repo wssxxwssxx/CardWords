@@ -59,6 +59,12 @@ data object WordFallRoute
 data object DungeonRoute
 
 @Serializable
+data class AuthRoute(val initialTab: String = "login")
+
+@Serializable
+data object TestRoute
+
+@Serializable
 data object MainRoute
 
 @Serializable

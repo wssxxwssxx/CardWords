@@ -13,17 +13,16 @@ data class DailyGoalProgress(
 data class WeeklySummary(
     val thisWeekWords: Int,
     val lastWeekWords: Int,
-    val changePercent: Int?,  // null if no last week data
+    val changePercent: Int?,
 )
 
 object DailyGoalManager {
     const val DEFAULT_DAILY_GOAL = 10
     private const val SETTING_DAILY_GOAL = "daily_goal"
 
-    fun getDailyGoal(repository: DatabaseRepository): Int {
-        return repository.getSettingOrDefault(SETTING_DAILY_GOAL, DEFAULT_DAILY_GOAL.toString())
+    fun getDailyGoal(repository: DatabaseRepository): Int =
+        repository.getSettingOrDefault(SETTING_DAILY_GOAL, DEFAULT_DAILY_GOAL.toString())
             .toIntOrNull() ?: DEFAULT_DAILY_GOAL
-    }
 
     fun setDailyGoal(repository: DatabaseRepository, goal: Int) {
         repository.setSetting(SETTING_DAILY_GOAL, goal.coerceIn(1, 100).toString())
@@ -33,13 +32,9 @@ object DailyGoalManager {
         val goal = getDailyGoal(repository)
         val now = repository.currentTimeMillis()
         val todayStr = DateUtil.epochMillisToDateString(now)
-        val allActivity = repository.getAllDailyActivity()
-        val todayActivity = allActivity.find { it.date == todayStr }
+        val todayActivity = repository.getDailyActivityRange(todayStr, todayStr).firstOrNull()
         val wordsStudied = todayActivity?.wordsStudied ?: 0
-
-        val fraction = if (goal > 0) {
-            (wordsStudied.toFloat() / goal).coerceAtMost(1f)
-        } else 1f
+        val fraction = if (goal > 0) (wordsStudied.toFloat() / goal).coerceAtMost(1f) else 1f
 
         return DailyGoalProgress(
             goal = goal,
@@ -51,48 +46,40 @@ object DailyGoalManager {
 
     fun computeWeeklySummary(repository: DatabaseRepository): WeeklySummary {
         val now = repository.currentTimeMillis()
-        val allActivity = repository.getAllDailyActivity()
-        val activityByDate = allActivity.associateBy { it.date }
+        val twoWeeksAgoStr = DateUtil.daysAgoFromMillis(now, 13)
+        val todayStr = DateUtil.epochMillisToDateString(now)
+        val activityByDate = repository.getDailyActivityRange(twoWeeksAgoStr, todayStr)
+            .associateBy { it.date }
 
         val thisWeekWords = (0..6).sumOf { daysAgo ->
-            val dateStr = DateUtil.daysAgoFromMillis(now, daysAgo)
-            activityByDate[dateStr]?.wordsStudied ?: 0
+            activityByDate[DateUtil.daysAgoFromMillis(now, daysAgo)]?.wordsStudied ?: 0
         }
         val lastWeekWords = (7..13).sumOf { daysAgo ->
-            val dateStr = DateUtil.daysAgoFromMillis(now, daysAgo)
-            activityByDate[dateStr]?.wordsStudied ?: 0
+            activityByDate[DateUtil.daysAgoFromMillis(now, daysAgo)]?.wordsStudied ?: 0
         }
         val changePercent = if (lastWeekWords > 0) {
             ((thisWeekWords - lastWeekWords) * 100) / lastWeekWords
         } else null
 
-        return WeeklySummary(
-            thisWeekWords = thisWeekWords,
-            lastWeekWords = lastWeekWords,
-            changePercent = changePercent,
-        )
+        return WeeklySummary(thisWeekWords, lastWeekWords, changePercent)
     }
 
     fun countConsecutiveGoalDays(repository: DatabaseRepository): Int {
         val goal = getDailyGoal(repository)
         val now = repository.currentTimeMillis()
-        val allActivity = repository.getAllDailyActivity()
-        val activityByDate = allActivity.associateBy { it.date }
-
+        val lookbackStr = DateUtil.daysAgoFromMillis(now, 365)
         val todayStr = DateUtil.epochMillisToDateString(now)
-        val todayMet = (activityByDate[todayStr]?.wordsStudied ?: 0) >= goal
+        val activityByDate = repository.getDailyActivityRange(lookbackStr, todayStr)
+            .associateBy { it.date }
 
-        var count = 0
+        val todayMet = (activityByDate[todayStr]?.wordsStudied ?: 0) >= goal
         val startDay = if (todayMet) 0 else 1
+        var count = 0
 
         for (i in startDay..365) {
             val dateStr = DateUtil.daysAgoFromMillis(now, i)
-            val dayActivity = activityByDate[dateStr]
-            if (dayActivity != null && dayActivity.wordsStudied >= goal) {
-                count++
-            } else {
-                break
-            }
+            val activity = activityByDate[dateStr]
+            if (activity != null && activity.wordsStudied >= goal) count++ else break
         }
         return count
     }

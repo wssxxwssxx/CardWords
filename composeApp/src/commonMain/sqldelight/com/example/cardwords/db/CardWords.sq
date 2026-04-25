@@ -176,3 +176,23 @@ INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?);
 
 deleteSetting:
 DELETE FROM user_settings WHERE key = ?;
+
+-- ========== Clear All User Data ==========
+
+clearAllWords:
+DELETE FROM word;
+
+clearAllWordProgress:
+DELETE FROM word_progress;
+
+clearAllStudySessions:
+DELETE FROM study_session;
+
+clearAllDailyActivity:
+DELETE FROM daily_activity;
+
+clearAllAchievements:
+DELETE FROM achievement;
+
+clearAllSettings:
+DELETE FROM user_settings;

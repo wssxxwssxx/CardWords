@@ -1,60 +1,59 @@
 package com.example.cardwords.ui.study.mixed
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -62,33 +61,143 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.cardwords.data.model.AchievementType
-import com.example.cardwords.data.model.BonusType
 import com.example.cardwords.data.model.SessionReward
 import com.example.cardwords.data.model.Word
 import com.example.cardwords.ui.study.StudyMode
-import com.example.cardwords.ui.theme.Amber
-import com.example.cardwords.ui.theme.AmberDark
-import com.example.cardwords.ui.theme.AmberLight
-import com.example.cardwords.ui.theme.AmberMuted
-import com.example.cardwords.ui.theme.Green60
-import com.example.cardwords.ui.theme.GreenDark
-import com.example.cardwords.ui.theme.Indigo
-import com.example.cardwords.ui.theme.Surface1
-import com.example.cardwords.ui.theme.Surface2
-import com.example.cardwords.ui.theme.TextSecondary
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import com.example.cardwords.ui.theme.Amber40
+import com.example.cardwords.ui.theme.Green40
+import com.example.cardwords.ui.theme.LightBg
+import com.example.cardwords.ui.theme.LightCard
+import com.example.cardwords.ui.theme.LightDotActive
+import com.example.cardwords.ui.theme.LightFg
+import com.example.cardwords.ui.theme.LightFgMuted
+import com.example.cardwords.ui.theme.LightFgSecondary
+import com.example.cardwords.ui.theme.LightProgressBar
+import com.example.cardwords.ui.theme.Red40
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
+// ─────────────────────────────────────────────
+//  Design tokens — all from Theme.kt
+// ─────────────────────────────────────────────
+private val BgPage       = LightBg               // #F5F5F7
+private val BgCard       = LightCard             // #FFFFFF
+private val Fg           = LightFg               // #1D1D1F
+private val FgSecondary  = LightFgSecondary      // #86868B
+private val FgMuted      = LightFgMuted          // #C7C7CC
+private val Accent       = LightFg               // primary accent = near-black
+private val ProgressBar  = LightProgressBar      // #007AFF
+private val Success      = Green40               // correct state
+private val Failure      = Red40                 // wrong state
+private val Warning      = Amber40               // streak / amber
+private val DividerColor = Color(0xFFE5E5EA)
+private val FieldBg      = Color(0xFFF2F2F7)
+
+// ─────────────────────────────────────────────
+//  Mode icons — Canvas drawn, no emojis
+// ─────────────────────────────────────────────
+private object ModeIconPaths {
+    // Test (✓ — simple checkmark)
+    const val CHECK = "M4 12L9 17L20 6"
+    // Typing (pencil — edit-3 feather style)
+    const val PENCIL = "M17.5 3.5A2.121 2.121 0 0 1 20.5 6.5L7 20L3 21L4 17L17.5 3.5Z"
+    // Assembly (2x2 grid — letter tiles)
+    const val GRID_TL = "M3 3H10V10H3Z"
+    const val GRID_TR = "M14 3H21V10H14Z"
+    const val GRID_BL = "M3 14H10V21H3Z"
+    const val GRID_BR = "M14 14H21V21H14Z"
+}
+
+@Composable
+private fun CheckIcon(color: Color, modifier: Modifier = Modifier) {
+    val path = remember { PathParser().parsePathString(ModeIconPaths.CHECK).toPath() }
+    Canvas(modifier) {
+        val s = size.width / 24f
+        scale(s, s, Offset.Zero) {
+            drawPath(path, color, style = Stroke(2.2f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+    }
+}
+
+@Composable
+private fun CardsIcon(color: Color, modifier: Modifier = Modifier) {
+    // Two stacked rectangles — representing flashcards
+    Canvas(modifier) {
+        val s = size.width / 24f
+        val stroke = Stroke(1.8f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        scale(s, s, Offset.Zero) {
+            // Back card (rotated-like — offset + slight)
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(7f, 3f),
+                size = androidx.compose.ui.geometry.Size(14f, 16f),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f),
+                style = stroke,
+            )
+            // Front card (covers part of back)
+            drawRoundRect(
+                color = BgCard,
+                topLeft = Offset(3f, 5f),
+                size = androidx.compose.ui.geometry.Size(14f, 16f),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f),
+            )
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(3f, 5f),
+                size = androidx.compose.ui.geometry.Size(14f, 16f),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f),
+                style = stroke,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PencilIcon(color: Color, modifier: Modifier = Modifier) {
+    val path = remember { PathParser().parsePathString(ModeIconPaths.PENCIL).toPath() }
+    Canvas(modifier) {
+        val s = size.width / 24f
+        scale(s, s, Offset.Zero) {
+            drawPath(path, color, style = Stroke(1.8f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+    }
+}
+
+@Composable
+private fun GridIcon(color: Color, modifier: Modifier = Modifier) {
+    val tl = remember { PathParser().parsePathString(ModeIconPaths.GRID_TL).toPath() }
+    val tr = remember { PathParser().parsePathString(ModeIconPaths.GRID_TR).toPath() }
+    val bl = remember { PathParser().parsePathString(ModeIconPaths.GRID_BL).toPath() }
+    val br = remember { PathParser().parsePathString(ModeIconPaths.GRID_BR).toPath() }
+    Canvas(modifier) {
+        val s = size.width / 24f
+        val stroke = Stroke(1.8f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        scale(s, s, Offset.Zero) {
+            drawPath(tl, color, style = stroke)
+            drawPath(tr, color, style = stroke)
+            drawPath(bl, color, style = stroke)
+            drawPath(br, color, style = stroke)
+        }
+    }
+}
+
+@Composable
+private fun ChevronLeftIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val s = size.width / 24f
+        scale(s, s, Offset.Zero) {
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(15f, 5f)
+                lineTo(8f, 12f)
+                lineTo(15f, 19f)
+            }
+            drawPath(path, color, style = Stroke(2f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
+//  Main screen
+// ─────────────────────────────────────────────
 @Composable
 fun MixedStudyScreen(
     multipleChoice: Boolean,
@@ -107,28 +216,43 @@ fun MixedStudyScreen(
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Обучение",
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BgPage)
+            .statusBarsPadding(),
+    ) {
+        // Toolbar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onNavigateBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                ChevronLeftIcon(color = Fg, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = "Обучение",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = Fg,
             )
         }
-    ) { paddingValues ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(horizontal = 20.dp)
+                .padding(top = 4.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             when {
@@ -142,16 +266,16 @@ fun MixedStudyScreen(
                 )
                 else -> StudyContent(
                     uiState = uiState,
-                    onSelectMcAnswer = { viewModel.selectAnswer(it) },
-                    onFlipCard = { viewModel.flipCard() },
-                    onKnew = { viewModel.markKnew() },
-                    onDidNotKnow = { viewModel.markDidNotKnow() },
-                    onTypingInput = { viewModel.updateInput(it) },
-                    onSubmitTyping = { viewModel.submitTypingAnswer() },
-                    onPlaceLetter = { viewModel.placeLetter(it) },
-                    onRemoveLetter = { viewModel.removeLetter(it) },
-                    onNextCard = { viewModel.nextCard() },
-                    onSkip = { viewModel.skip() },
+                    onSelectMcAnswer = viewModel::selectAnswer,
+                    onFlipCard = viewModel::flipCard,
+                    onKnew = viewModel::markKnew,
+                    onDidNotKnow = viewModel::markDidNotKnow,
+                    onTypingInput = viewModel::updateInput,
+                    onSubmitTyping = viewModel::submitTypingAnswer,
+                    onPlaceLetter = viewModel::placeLetter,
+                    onRemoveLetter = viewModel::removeLetter,
+                    onNextCard = viewModel::nextCard,
+                    onSkip = viewModel::skip,
                 )
             }
         }
@@ -172,34 +296,37 @@ private fun StudyContent(
     onNextCard: () -> Unit,
     onSkip: () -> Unit,
 ) {
-    // Progress
-    LinearProgressIndicator(
-        progress = { uiState.progress },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(8.dp),
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.primaryContainer,
-    )
+    // Progress + counter
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LinearProgressIndicator(
+            progress = { uiState.progress },
+            modifier = Modifier
+                .weight(1f)
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = ProgressBar,
+            trackColor = FgMuted.copy(alpha = 0.4f),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = "${uiState.currentIndex + 1} / ${uiState.totalCards}",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = FgSecondary,
+        )
+    }
 
-    Spacer(modifier = Modifier.height(8.dp))
-
-    Text(
-        text = "${uiState.currentIndex + 1} / ${uiState.totalCards}",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(Modifier.height(16.dp))
 
     val question = uiState.currentQuestion ?: return
 
-    // Mode badge
     ModeBadge(question.mode)
 
-    Spacer(modifier = Modifier.height(20.dp))
+    Spacer(Modifier.height(20.dp))
 
-    // Mode-specific content
     when (question.mode) {
         StudyMode.MULTIPLE_CHOICE -> MultipleChoiceContent(
             question = question,
@@ -236,69 +363,58 @@ private fun StudyContent(
         )
     }
 
-    // Skip button — shown when the user hasn't answered yet
     if (uiState.answerState == MixedAnswerState.Unanswered) {
-        Spacer(modifier = Modifier.height(16.dp))
-        TextButton(
-            onClick = onSkip,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = "Пропустить",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = "Пропустить",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = FgSecondary,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .clickable(onClick = onSkip)
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+        )
     }
 }
 
 @Composable
 private fun ModeBadge(mode: StudyMode) {
-    val (emoji, label, bgColor, textColor) = when (mode) {
-        StudyMode.MULTIPLE_CHOICE -> listOf(
-            "\uD83C\uDFAF", "Тест",
-            MaterialTheme.colorScheme.primaryContainer,
-            MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-        StudyMode.FLASHCARD -> listOf(
-            "\uD83D\uDCCB", "Карточки",
-            MaterialTheme.colorScheme.secondaryContainer,
-            MaterialTheme.colorScheme.onSecondaryContainer,
-        )
-        StudyMode.TYPING -> listOf(
-            "\u270D\uFE0F", "Ввод",
-            MaterialTheme.colorScheme.tertiaryContainer,
-            MaterialTheme.colorScheme.onTertiaryContainer,
-        )
-        StudyMode.LETTER_ASSEMBLY -> listOf(
-            "\uD83D\uDD24", "Сборка",
-            AmberDark,
-            AmberLight,
-        )
+    val label = when (mode) {
+        StudyMode.MULTIPLE_CHOICE -> "Тест"
+        StudyMode.FLASHCARD -> "Карточки"
+        StudyMode.TYPING -> "Ввод"
+        StudyMode.LETTER_ASSEMBLY -> "Сборка"
     }
 
     Row(
         modifier = Modifier
-            .background(
-                color = bgColor as Color,
-                shape = RoundedCornerShape(12.dp),
-            )
-            .padding(horizontal = 14.dp, vertical = 6.dp),
+            .clip(RoundedCornerShape(50))
+            .background(BgCard)
+            .border(0.5.dp, DividerColor, RoundedCornerShape(50))
+            .padding(horizontal = 14.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = emoji as String, fontSize = 14.sp)
-        Spacer(modifier = Modifier.width(6.dp))
+        val iconSize = 14.dp
+        when (mode) {
+            StudyMode.MULTIPLE_CHOICE -> CheckIcon(Fg, Modifier.size(iconSize))
+            StudyMode.FLASHCARD -> CardsIcon(Fg, Modifier.size(iconSize))
+            StudyMode.TYPING -> PencilIcon(Fg, Modifier.size(iconSize))
+            StudyMode.LETTER_ASSEMBLY -> GridIcon(Fg, Modifier.size(iconSize))
+        }
+        Spacer(Modifier.width(8.dp))
         Text(
-            text = label as String,
-            style = MaterialTheme.typography.labelMedium,
+            text = label,
+            fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
-            color = textColor as Color,
+            color = Fg,
         )
     }
 }
 
-// --- Multiple Choice ---
-
+// ─────────────────────────────────────────────
+//  Multiple Choice
+// ─────────────────────────────────────────────
 @Composable
 private fun MultipleChoiceContent(
     question: MixedQuestion,
@@ -307,11 +423,9 @@ private fun MultipleChoiceContent(
     onSelectAnswer: (Int) -> Unit,
     onNext: () -> Unit,
 ) {
-    val successColor = Green60
-
     WordCard(question.word)
 
-    Spacer(modifier = Modifier.height(28.dp))
+    Spacer(Modifier.height(24.dp))
 
     McOptions(
         options = question.mcOptions,
@@ -322,20 +436,12 @@ private fun MultipleChoiceContent(
 
     val mcAnswer = answerState as? MixedAnswerState.McAnswered
     if (mcAnswer != null) {
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Text(
-            text = if (mcAnswer.isCorrect) "Правильно!"
-            else "Неправильно. Ответ: ${question.word.original}",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = if (mcAnswer.isCorrect) successColor else MaterialTheme.colorScheme.error,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
+        Spacer(Modifier.height(18.dp))
+        FeedbackText(
+            correct = mcAnswer.isCorrect,
+            correctAnswer = question.word.original,
         )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
+        Spacer(Modifier.height(18.dp))
         NextButton(isLast = isLast, onClick = onNext)
     }
 }
@@ -347,69 +453,68 @@ private fun McOptions(
     answerState: MixedAnswerState,
     onSelect: (Int) -> Unit,
 ) {
-    val correctColor = Green60
-    val correctContainerColor = GreenDark
     val isAnswered = answerState is MixedAnswerState.McAnswered
     val answered = answerState as? MixedAnswerState.McAnswered
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         options.forEachIndexed { index, option ->
-            val containerColorAnim by animateColorAsState(
-                targetValue = when {
-                    !isAnswered -> MaterialTheme.colorScheme.surface
-                    index == correctIndex -> correctContainerColor
-                    index == answered?.selectedIndex -> MaterialTheme.colorScheme.errorContainer
-                    else -> MaterialTheme.colorScheme.surface
-                },
-                animationSpec = tween(300),
-            )
-            val borderColor by animateColorAsState(
-                targetValue = when {
-                    !isAnswered -> MaterialTheme.colorScheme.outline
-                    index == correctIndex -> correctColor
-                    index == answered?.selectedIndex -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.outlineVariant
-                },
-                animationSpec = tween(300),
-            )
-            val textColor by animateColorAsState(
-                targetValue = when {
-                    !isAnswered -> MaterialTheme.colorScheme.onSurface
-                    index == correctIndex -> correctColor
-                    index == answered?.selectedIndex -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                animationSpec = tween(300),
-            )
+            val isCorrect = index == correctIndex
+            val isSelected = index == answered?.selectedIndex
 
-            OutlinedButton(
-                onClick = { onSelect(index) },
+            val bg by animateColorAsState(
+                targetValue = when {
+                    !isAnswered -> BgCard
+                    isCorrect -> Success.copy(alpha = 0.08f)
+                    isSelected -> Failure.copy(alpha = 0.08f)
+                    else -> BgCard
+                },
+                animationSpec = tween(250),
+            )
+            val borderCol by animateColorAsState(
+                targetValue = when {
+                    !isAnswered -> DividerColor
+                    isCorrect -> Success
+                    isSelected -> Failure
+                    else -> DividerColor
+                },
+                animationSpec = tween(250),
+            )
+            val textCol by animateColorAsState(
+                targetValue = when {
+                    !isAnswered -> Fg
+                    isCorrect -> Success
+                    isSelected -> Failure
+                    else -> FgSecondary
+                },
+                animationSpec = tween(250),
+            )
+            val borderWidth = if (isAnswered && (isCorrect || isSelected)) 1.5.dp else 0.5.dp
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                enabled = !isAnswered,
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = containerColorAnim,
-                    disabledContainerColor = containerColorAnim,
-                ),
-                border = BorderStroke(
-                    width = if (isAnswered && (index == correctIndex || index == answered?.selectedIndex)) 2.dp else 1.dp,
-                    color = borderColor,
-                ),
+                    .heightIn(min = 54.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(bg, RoundedCornerShape(14.dp))
+                    .border(borderWidth, borderCol, RoundedCornerShape(14.dp))
+                    .clickable(enabled = !isAnswered) { onSelect(index) }
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                contentAlignment = Alignment.CenterStart,
             ) {
                 Text(
                     text = option,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = textColor,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = textCol,
                 )
             }
         }
     }
 }
 
-// --- Flashcard ---
-
+// ─────────────────────────────────────────────
+//  Flashcard
+// ─────────────────────────────────────────────
 @Composable
 private fun FlashcardContent(
     word: Word,
@@ -423,119 +528,104 @@ private fun FlashcardContent(
         animationSpec = tween(400),
     )
 
-    Card(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 200.dp)
+            .heightIn(min = 220.dp)
             .graphicsLayer {
                 rotationY = rotation
                 cameraDistance = 12f * density
             }
+            .clip(RoundedCornerShape(20.dp))
+            .background(BgCard)
+            .border(0.5.dp, DividerColor, RoundedCornerShape(20.dp))
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
                 onClick = onFlip,
-            ),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isFlipped)
-                MaterialTheme.colorScheme.secondaryContainer
-            else
-                MaterialTheme.colorScheme.primaryContainer,
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            )
+            .padding(horizontal = 24.dp, vertical = 32.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 200.dp)
-                .padding(32.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (rotation <= 90f) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        if (rotation <= 90f) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = word.translation,
+                    fontSize = 26.sp,
+                    lineHeight = 34.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Fg,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "Нажмите, чтобы перевернуть",
+                    fontSize = 13.sp,
+                    color = FgSecondary,
+                )
+            }
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.graphicsLayer { rotationY = 180f },
+            ) {
+                Text(
+                    text = word.original,
+                    fontSize = 26.sp,
+                    lineHeight = 34.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Fg,
+                    textAlign = TextAlign.Center,
+                )
+                if (word.transcription.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
                     Text(
-                        text = word.translation,
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                        ),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        textAlign = TextAlign.Center,
+                        text = word.transcription,
+                        fontSize = 15.sp,
+                        color = FgSecondary,
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Нажмите, чтобы перевернуть",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.4f),
-                    )
-                }
-            } else {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.graphicsLayer { rotationY = 180f },
-                ) {
-                    Text(
-                        text = word.original,
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                        ),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        textAlign = TextAlign.Center,
-                    )
-                    if (word.transcription.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = word.transcription,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f),
-                        )
-                    }
                 }
             }
         }
     }
 
-    Spacer(modifier = Modifier.height(28.dp))
+    Spacer(Modifier.height(24.dp))
 
     if (isFlipped) {
         Text(
             text = "Вы знали это слово?",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = FgSecondary,
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Button(
+            PillButton(
+                text = "Не знал",
                 onClick = onDidNotKnow,
-                modifier = Modifier.weight(1f).height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                ),
-            ) {
-                Text("Не знал", fontWeight = FontWeight.Bold)
-            }
-            Button(
+                bg = Failure.copy(alpha = 0.08f),
+                textColor = Failure,
+                border = Failure,
+                modifier = Modifier.weight(1f),
+            )
+            PillButton(
+                text = "Знал",
                 onClick = onKnew,
-                modifier = Modifier.weight(1f).height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
-            ) {
-                Text("Знал", fontWeight = FontWeight.Bold)
-            }
+                bg = Success.copy(alpha = 0.08f),
+                textColor = Success,
+                border = Success,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
 
-// --- Typing ---
-
+// ─────────────────────────────────────────────
+//  Typing
+// ─────────────────────────────────────────────
 @Composable
 private fun TypingContent(
     word: Word,
@@ -546,28 +636,14 @@ private fun TypingContent(
     onSubmit: () -> Unit,
     onNext: () -> Unit,
 ) {
-    val successColor = Green60
     val isAnswered = answerState != MixedAnswerState.Unanswered
 
-    // Auto-focus when a new word appears
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(word.id) {
         delay(150)
         try { focusRequester.requestFocus() } catch (_: Exception) {}
     }
 
-    // Pulsing glow on empty field border
-    val infiniteTransition = rememberInfiniteTransition()
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = EaseInOut),
-            repeatMode = RepeatMode.Reverse,
-        ),
-    )
-
-    // Shake animation on incorrect answer
     val shakeOffset = remember { Animatable(0f) }
     LaunchedEffect(answerState) {
         if (answerState is MixedAnswerState.TypingIncorrect) {
@@ -581,179 +657,213 @@ private fun TypingContent(
 
     WordCard(word)
 
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(Modifier.height(20.dp))
 
-    OutlinedTextField(
-        value = userInput,
-        onValueChange = onInputChange,
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusRequester(focusRequester)
-            .graphicsLayer {
-                translationX = shakeOffset.value
-            },
-        label = { Text("Как это по-английски?") },
-        supportingText = if (!isAnswered && userInput.isEmpty()) {
-            { Text("Введите перевод слова") }
-        } else null,
-        enabled = !isAnswered,
-        singleLine = true,
-        shape = RoundedCornerShape(16.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            unfocusedBorderColor = if (userInput.isEmpty() && !isAnswered) {
-                MaterialTheme.colorScheme.primary.copy(alpha = glowAlpha)
-            } else {
-                MaterialTheme.colorScheme.outline
-            },
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            focusedLabelColor = MaterialTheme.colorScheme.primary,
-        ),
-    )
-
-    Spacer(modifier = Modifier.height(16.dp))
-
-    if (!isAnswered) {
-        Button(
-            onClick = onSubmit,
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "Как это по-английски?",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = FgSecondary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+        )
+        TextField(
+            value = userInput,
+            onValueChange = onInputChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            enabled = userInput.isNotBlank(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
+                .focusRequester(focusRequester)
+                .graphicsLayer { translationX = shakeOffset.value }
+                .clip(RoundedCornerShape(14.dp)),
+            placeholder = {
+                Text("Введите перевод", color = FgMuted, fontSize = 15.sp)
+            },
+            singleLine = true,
+            enabled = !isAnswered,
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = Fg,
+                unfocusedTextColor = Fg,
+                disabledTextColor = Fg,
+                focusedContainerColor = FieldBg,
+                unfocusedContainerColor = FieldBg,
+                disabledContainerColor = FieldBg,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+                cursorColor = Fg,
             ),
-        ) {
-            Text(
-                text = "ПРОВЕРИТЬ",
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                ),
-            )
-        }
+        )
+    }
+
+    Spacer(Modifier.height(16.dp))
+
+    if (!isAnswered) {
+        PrimaryButton(
+            text = "Проверить",
+            onClick = onSubmit,
+            enabled = userInput.isNotBlank(),
+        )
     } else {
         when (answerState) {
-            is MixedAnswerState.TypingCorrect -> {
-                Text(
-                    text = "Правильно!",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = successColor,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            is MixedAnswerState.TypingIncorrect -> {
-                Text(
-                    text = "Неправильно. Ответ: ${answerState.correctAnswer}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            is MixedAnswerState.TypingCorrect -> FeedbackText(correct = true, correctAnswer = word.original)
+            is MixedAnswerState.TypingIncorrect -> FeedbackText(
+                correct = false,
+                correctAnswer = answerState.correctAnswer,
+            )
             else -> {}
         }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
+        Spacer(Modifier.height(16.dp))
         NextButton(isLast = isLast, onClick = onNext)
     }
 }
 
-// --- Common composables ---
-
+// ─────────────────────────────────────────────
+//  Shared components
+// ─────────────────────────────────────────────
 @Composable
 private fun WordCard(word: Word) {
-    Card(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 120.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = word.translation,
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
-
-@Composable
-private fun NextButton(isLast: Boolean, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-        ),
+            .heightIn(min = 120.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(BgCard)
+            .border(0.5.dp, DividerColor, RoundedCornerShape(20.dp))
+            .padding(horizontal = 24.dp, vertical = 28.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = if (isLast) "РЕЗУЛЬТАТЫ" else "ДАЛЕЕ",
-            style = MaterialTheme.typography.labelLarge.copy(
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
-            ),
+            text = word.translation,
+            fontSize = 26.sp,
+            lineHeight = 34.sp,
+            fontWeight = FontWeight.Bold,
+            color = Fg,
+            textAlign = TextAlign.Center,
         )
     }
 }
 
 @Composable
-private fun EmptyContent(onNavigateToAddWords: () -> Unit) {
+private fun FeedbackText(correct: Boolean, correctAnswer: String) {
+    val color = if (correct) Success else Failure
+    val label = if (correct) "Правильно!" else "Неправильно. Ответ: $correctAnswer"
+    Text(
+        text = label,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = color,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun PrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    val bg = if (enabled) Accent else FgMuted
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(54.dp)
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
+        Text(
+            text = text,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = BgCard,
+        )
+    }
+}
+
+@Composable
+private fun PillButton(
+    text: String,
+    onClick: () -> Unit,
+    bg: Color,
+    textColor: Color,
+    border: Color,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .height(54.dp)
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .border(1.dp, border, RoundedCornerShape(50))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = textColor,
+        )
+    }
+}
+
+@Composable
+private fun NextButton(isLast: Boolean, onClick: () -> Unit) {
+    PrimaryButton(
+        text = if (isLast) "Результаты" else "Далее",
+        onClick = onClick,
+    )
+}
+
+@Composable
+private fun EmptyContent(onNavigateToAddWords: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(top = 64.dp),
+        contentAlignment = Alignment.TopCenter,
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = "\uD83D\uDCDD", fontSize = 64.sp)
-            Spacer(modifier = Modifier.height(16.dp))
+            // Stylized empty-box icon instead of emoji
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(BgCard)
+                    .border(0.5.dp, DividerColor, RoundedCornerShape(18.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                CardsIcon(FgMuted, Modifier.size(36.dp))
+            }
+            Spacer(Modifier.height(20.dp))
             Text(
                 text = "Нет слов для изучения",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Fg,
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = "Сначала добавьте слова в словарь",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 15.sp,
+                color = FgSecondary,
                 textAlign = TextAlign.Center,
             )
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = onNavigateToAddWords,
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                ),
+            Spacer(Modifier.height(24.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Accent)
+                    .clickable(onClick = onNavigateToAddWords)
+                    .padding(horizontal = 28.dp, vertical = 14.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = "Добавить слова",
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                    ),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = BgCard,
                 )
             }
         }
@@ -769,177 +879,155 @@ private fun ResultsContent(
     onFinish: () -> Unit,
 ) {
     val percentage = if (totalCards > 0) (correctCount * 100) / totalCards else 0
-    val successColor = Green60
 
-    Spacer(modifier = Modifier.height(32.dp))
+    Spacer(Modifier.height(32.dp))
 
-    // Reward emoji + message
-    if (sessionReward != null) {
-        Text(
-            text = sessionReward.emoji,
-            fontSize = 48.sp,
+    // Circular progress — visual percentage
+    Box(
+        modifier = Modifier.size(160.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(
+            progress = { 1f },
+            modifier = Modifier.size(160.dp),
+            color = FgMuted.copy(alpha = 0.3f),
+            strokeWidth = 8.dp,
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        CircularProgressIndicator(
+            progress = { percentage / 100f },
+            modifier = Modifier.size(160.dp),
+            color = if (percentage >= 70) Success else if (percentage >= 40) Warning else Failure,
+            strokeWidth = 8.dp,
+        )
+        Text(
+            text = "$percentage%",
+            fontSize = 42.sp,
+            fontWeight = FontWeight.Bold,
+            color = Fg,
+        )
     }
 
-    Text(
-        text = "$percentage%",
-        style = MaterialTheme.typography.displayLarge.copy(
-            fontWeight = FontWeight.Bold,
-        ),
-        color = if (percentage >= 70) successColor else MaterialTheme.colorScheme.error,
-    )
-
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(Modifier.height(20.dp))
 
     Text(
         text = "Правильных ответов: $correctCount из $totalCards",
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onSurface,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.Medium,
+        color = Fg,
     )
 
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(Modifier.height(6.dp))
 
-    // Motivational message from RewardGenerator
     Text(
         text = sessionReward?.motivationalMessage ?: when {
-            percentage == 100 -> "Отлично! Все ответы верные!"
-            percentage >= 70 -> "Хороший результат! Продолжайте!"
-            percentage >= 40 -> "Неплохо, но есть куда расти."
-            else -> "Попробуйте ещё раз!"
+            percentage == 100 -> "Отлично! Все ответы верные"
+            percentage >= 70 -> "Хороший результат, продолжайте"
+            percentage >= 40 -> "Неплохо, но есть куда расти"
+            else -> "Попробуйте ещё раз"
         },
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontSize = 14.sp,
+        color = FgSecondary,
         textAlign = TextAlign.Center,
     )
 
-    // XP Reward breakdown
     if (sessionReward != null) {
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(Modifier.height(20.dp))
         XpRewardCard(sessionReward = sessionReward)
     }
 
-    // Achievement banner
     if (newAchievements.isNotEmpty()) {
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         AchievementUnlockedBanner(achievements = newAchievements)
     }
 
-    Spacer(modifier = Modifier.height(32.dp))
+    Spacer(Modifier.height(28.dp))
 
-    Button(
-        onClick = onFinish,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-        ),
-    ) {
-        Text(
-            text = "ГОТОВО",
-            style = MaterialTheme.typography.labelLarge.copy(
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp,
-            ),
-        )
-    }
+    PrimaryButton(text = "Готово", onClick = onFinish)
 }
 
 @Composable
 private fun XpRewardCard(sessionReward: SessionReward) {
     val xp = sessionReward.xpReward
-    val bgColor = Surface2
-    val textColor = AmberLight
-    val subtextColor = TextSecondary
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = bgColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(BgCard)
+            .border(0.5.dp, DividerColor, RoundedCornerShape(16.dp))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Text(
+            text = "+${xp.totalXp} XP",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = Fg,
+        )
+
+        Spacer(Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            Text(
-                text = "+${xp.totalXp} XP",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = textColor,
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Breakdown
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                XpBreakdownItem(
-                    label = "Ответы",
-                    value = "+${xp.baseXp}",
-                    color = subtextColor,
-                )
-                if (xp.streakBonus > 0) {
-                    XpBreakdownItem(
-                        label = "Серия",
-                        value = "+${xp.streakBonus}",
-                        color = subtextColor,
-                    )
-                }
-                if (xp.perfectBonus > 0) {
-                    XpBreakdownItem(
-                        label = "Идеально",
-                        value = "+${xp.perfectBonus}",
-                        color = subtextColor,
-                    )
-                }
+            XpBreakdownItem(label = "Ответы", value = "+${xp.baseXp}")
+            if (xp.streakBonus > 0) {
+                XpBreakdownItem(label = "Серия", value = "+${xp.streakBonus}")
             }
+            if (xp.perfectBonus > 0) {
+                XpBreakdownItem(label = "Идеально", value = "+${xp.perfectBonus}")
+            }
+        }
 
-            // Level up notification
-            if (xp.leveledUp) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = AmberDark,
-                    ),
-                ) {
-                    Text(
-                        text = "\uD83C\uDF1F Уровень ${xp.newLevel}!",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = textColor,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                    )
-                }
+        if (xp.leveledUp) {
+            Spacer(Modifier.height(14.dp))
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Warning.copy(alpha = 0.12f))
+                    .border(0.5.dp, Warning, RoundedCornerShape(50))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(Warning),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Уровень ${xp.newLevel}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Warning,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun XpBreakdownItem(label: String, value: String, color: Color) {
+private fun XpBreakdownItem(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = value,
-            style = MaterialTheme.typography.titleSmall,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            color = color,
+            color = Fg,
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = color.copy(alpha = 0.7f),
+            fontSize = 11.sp,
+            color = FgSecondary,
         )
     }
 }
 
-// --- Letter Assembly ---
-
+// ─────────────────────────────────────────────
+//  Letter Assembly
+// ─────────────────────────────────────────────
 @Composable
 private fun LetterAssemblyContent(
     word: Word,
@@ -951,11 +1039,9 @@ private fun LetterAssemblyContent(
     onRemoveLetter: (Int) -> Unit,
     onNext: () -> Unit,
 ) {
-    val successColor = Green60
-
     WordCard(word)
 
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(Modifier.height(24.dp))
 
     LetterAssemblyGrid(
         tiles = tiles,
@@ -967,29 +1053,15 @@ private fun LetterAssemblyContent(
 
     when (answerState) {
         is MixedAnswerState.AssemblyCorrect -> {
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = "Правильно!",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = successColor,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
+            FeedbackText(correct = true, correctAnswer = correctAnswer)
+            Spacer(Modifier.height(18.dp))
             NextButton(isLast = isLast, onClick = onNext)
         }
         is MixedAnswerState.AssemblyIncorrect -> {
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = "Неправильно. Ответ: ${answerState.correctAnswer}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
+            FeedbackText(correct = false, correctAnswer = answerState.correctAnswer)
+            Spacer(Modifier.height(18.dp))
             NextButton(isLast = isLast, onClick = onNext)
         }
         else -> {}
@@ -1011,14 +1083,10 @@ private fun LetterAssemblyGrid(
     val rowSpacing = 8.dp
     val sectionGap = 20.dp
 
-    val density = LocalDensity.current
-
     val isAnswered = answerState != MixedAnswerState.Unanswered
     val isCorrect = answerState is MixedAnswerState.AssemblyCorrect
 
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val containerWidth = maxWidth
         val tileTotalWidth = tileSize + tileSpacing
         val maxPerRow = ((containerWidth + tileSpacing) / tileTotalWidth).toInt().coerceAtLeast(1)
@@ -1026,7 +1094,6 @@ private fun LetterAssemblyGrid(
         val slotCount = correctAnswer.length
         val answerRows = (slotCount + maxPerRow - 1) / maxPerRow
 
-        val scrambleTiles = tiles.filter { !it.isPlaced }.sortedBy { it.scrambleIndex }
         val scrambleCount = tiles.size
         val scrambleRows = (scrambleCount + maxPerRow - 1) / maxPerRow
 
@@ -1034,7 +1101,6 @@ private fun LetterAssemblyGrid(
         val scrambleAreaHeight = (tileSize * scrambleRows) + (rowSpacing * (scrambleRows - 1).coerceAtLeast(0))
         val totalHeight = answerAreaHeight + sectionGap + scrambleAreaHeight
 
-        // Compute answer slot positions (centered per row)
         fun answerSlotPosition(slotIndex: Int): TilePosition {
             val row = slotIndex / maxPerRow
             val itemsInRow = if (row < answerRows - 1) maxPerRow
@@ -1047,7 +1113,6 @@ private fun LetterAssemblyGrid(
             return TilePosition(x, y)
         }
 
-        // Compute scramble positions (centered per row)
         fun scramblePosition(scrambleIndex: Int): TilePosition {
             val row = scrambleIndex / maxPerRow
             val itemsInRow = if (row < scrambleRows - 1) maxPerRow
@@ -1065,7 +1130,7 @@ private fun LetterAssemblyGrid(
                 .fillMaxWidth()
                 .height(totalHeight),
         ) {
-            // Draw answer slot placeholders
+            // Answer slot placeholders
             for (i in 0 until slotCount) {
                 val pos = answerSlotPosition(i)
                 AnswerSlotPlaceholder(
@@ -1075,77 +1140,87 @@ private fun LetterAssemblyGrid(
                 )
             }
 
-            // Draw separator line
+            // Separator line
             Box(
                 modifier = Modifier
                     .offset(y = answerAreaHeight + sectionGap / 2 - 0.5.dp)
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                    ),
+                    .background(DividerColor),
             )
 
-            // Draw each tile with animated position
+            // Tiles with animated positions — draw-phase translation for smoothness
+            val density = LocalDensity.current
+            val unplaced = remember(tiles) {
+                tiles.filter { !it.isPlaced }.sortedBy { it.scrambleIndex }
+            }
             tiles.forEach { tile ->
-                val targetPos = if (tile.isPlaced) {
-                    answerSlotPosition(tile.answerSlotIndex)
-                } else {
-                    // Find visual position in scramble area
-                    val unplacedTiles = tiles.filter { !it.isPlaced }.sortedBy { it.scrambleIndex }
-                    val visualIndex = unplacedTiles.indexOfFirst { it.id == tile.id }
-                        .coerceAtLeast(0)
-                    scramblePosition(visualIndex)
+                key(tile.id) {
+                    val targetPos = if (tile.isPlaced) {
+                        answerSlotPosition(tile.answerSlotIndex)
+                    } else {
+                        val visualIndex = unplaced.indexOfFirst { it.id == tile.id }
+                            .coerceAtLeast(0)
+                        scramblePosition(visualIndex)
+                    }
+
+                    val targetXpx = with(density) { targetPos.x.toPx() }
+                    val targetYpx = with(density) { targetPos.y.toPx() }
+
+                    val animX = remember { Animatable(targetXpx) }
+                    val animY = remember { Animatable(targetYpx) }
+
+                    LaunchedEffect(targetXpx, targetYpx) {
+                        animX.animateTo(
+                            targetXpx,
+                            spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium,
+                            ),
+                        )
+                    }
+                    LaunchedEffect(targetXpx, targetYpx) {
+                        animY.animateTo(
+                            targetYpx,
+                            spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium,
+                            ),
+                        )
+                    }
+
+                    LetterTileView(
+                        tile = tile,
+                        isAnswered = isAnswered,
+                        isCorrect = isCorrect,
+                        modifier = Modifier
+                            .size(tileSize)
+                            .graphicsLayer {
+                                translationX = animX.value
+                                translationY = animY.value
+                            },
+                        onClick = {
+                            if (!isAnswered) {
+                                if (tile.isPlaced) onRemoveLetter(tile.id)
+                                else onPlaceLetter(tile.id)
+                            }
+                        },
+                    )
                 }
-
-                val animatedX by animateDpAsState(
-                    targetValue = targetPos.x,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
-                )
-                val animatedY by animateDpAsState(
-                    targetValue = targetPos.y,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
-                )
-
-                LetterTileView(
-                    tile = tile,
-                    isAnswered = isAnswered,
-                    isCorrect = isCorrect,
-                    modifier = Modifier
-                        .offset(x = animatedX, y = animatedY)
-                        .size(tileSize),
-                    onClick = {
-                        if (!isAnswered) {
-                            if (tile.isPlaced) onRemoveLetter(tile.id)
-                            else onPlaceLetter(tile.id)
-                        }
-                    },
-                )
             }
         }
     }
 }
 
 @Composable
-private fun AnswerSlotPlaceholder(
-    modifier: Modifier = Modifier,
-) {
+private fun AnswerSlotPlaceholder(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
+            .background(FieldBg, RoundedCornerShape(10.dp))
             .border(
-                width = 1.5.dp,
-                color = AmberMuted.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(10.dp),
-            )
-            .background(
-                color = AmberDark.copy(alpha = 0.5f),
+                width = 1.dp,
+                color = DividerColor,
                 shape = RoundedCornerShape(10.dp),
             ),
     )
@@ -1159,42 +1234,40 @@ private fun LetterTileView(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val bgColor by animateColorAsState(
+    val bgCol by animateColorAsState(
         targetValue = when {
-            isAnswered && isCorrect && tile.isPlaced -> GreenDark
-            isAnswered && !isCorrect && tile.isPlaced -> Color(0xFF3A1E1E)
-            tile.isPlaced -> Amber.copy(alpha = 0.2f)
-            else -> AmberDark
+            isAnswered && isCorrect && tile.isPlaced -> Success.copy(alpha = 0.12f)
+            isAnswered && !isCorrect && tile.isPlaced -> Failure.copy(alpha = 0.12f)
+            tile.isPlaced -> BgCard
+            else -> BgCard
         },
-        animationSpec = tween(300),
+        animationSpec = tween(250),
     )
 
-    val borderColor by animateColorAsState(
+    val borderCol by animateColorAsState(
         targetValue = when {
-            isAnswered && isCorrect && tile.isPlaced -> Green60
-            isAnswered && !isCorrect && tile.isPlaced ->
-                MaterialTheme.colorScheme.error
-            tile.isPlaced -> Amber
-            else -> AmberMuted
+            isAnswered && isCorrect && tile.isPlaced -> Success
+            isAnswered && !isCorrect && tile.isPlaced -> Failure
+            tile.isPlaced -> Fg
+            else -> DividerColor
         },
-        animationSpec = tween(300),
+        animationSpec = tween(250),
     )
 
-    val textColor by animateColorAsState(
+    val textCol by animateColorAsState(
         targetValue = when {
-            isAnswered && isCorrect && tile.isPlaced -> Green60
-            isAnswered && !isCorrect && tile.isPlaced ->
-                MaterialTheme.colorScheme.error
-            else -> AmberLight
+            isAnswered && isCorrect && tile.isPlaced -> Success
+            isAnswered && !isCorrect && tile.isPlaced -> Failure
+            else -> Fg
         },
-        animationSpec = tween(300),
+        animationSpec = tween(250),
     )
 
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(bgColor, RoundedCornerShape(10.dp))
-            .border(1.5.dp, borderColor, RoundedCornerShape(10.dp))
+            .background(bgCol, RoundedCornerShape(10.dp))
+            .border(1.dp, borderCol, RoundedCornerShape(10.dp))
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
@@ -1204,75 +1277,82 @@ private fun LetterTileView(
     ) {
         Text(
             text = tile.char.uppercase(),
-            style = MaterialTheme.typography.titleMedium,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = textColor,
+            color = textCol,
         )
     }
 }
 
-// --- Achievement Unlocked Banner ---
-
+// ─────────────────────────────────────────────
+//  Achievements Banner
+// ─────────────────────────────────────────────
 @Composable
-private fun AchievementUnlockedBanner(
-    achievements: List<AchievementType>,
-) {
-    val bgColor = Surface2
-    val textColor = Indigo
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = bgColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+private fun AchievementUnlockedBanner(achievements: List<AchievementType>) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(BgCard)
+            .border(0.5.dp, DividerColor, RoundedCornerShape(16.dp))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = "\uD83C\uDF89 ${if (achievements.size == 1) "Новое достижение!" else "Новые достижения!"}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = textColor,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(LightDotActive),
             )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (achievements.size == 1) "Новое достижение" else "Новые достижения",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Fg,
+            )
+        }
 
-            Spacer(modifier = Modifier.height(12.dp))
+        Spacer(Modifier.height(12.dp))
 
-            achievements.forEach { achievement ->
-                Row(
+        achievements.forEach { achievement ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(FieldBg)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Small bullet instead of emoji
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Surface1,
-                            RoundedCornerShape(12.dp),
-                        )
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(BgCard)
+                        .border(0.5.dp, DividerColor, RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = achievement.emoji,
-                        fontSize = 28.sp,
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = achievement.title,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = textColor,
-                        )
-                        Text(
-                            text = achievement.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = textColor.copy(alpha = 0.7f),
-                        )
-                    }
+                    CheckIcon(Success, Modifier.size(14.dp))
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = achievement.title,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Fg,
+                    )
+                    Text(
+                        text = achievement.description,
+                        fontSize = 12.sp,
+                        color = FgSecondary,
+                    )
+                }
             }
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
+

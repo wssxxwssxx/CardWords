@@ -15,7 +15,9 @@ import com.example.cardwords.navigation.StudyModeSelectionRoute
 import com.example.cardwords.navigation.StudyWordSettingsRoute
 import com.example.cardwords.navigation.PackDetailRoute
 import com.example.cardwords.navigation.WelcomeRoute
+import com.example.cardwords.navigation.AuthRoute
 import com.example.cardwords.navigation.DungeonRoute
+import com.example.cardwords.navigation.TestRoute
 import com.example.cardwords.navigation.WordFallRoute
 import com.example.cardwords.navigation.WordPacksRoute
 import com.example.cardwords.navigation.WordSelectionRoute
@@ -30,34 +32,44 @@ import com.example.cardwords.ui.study.mixed.MixedStudyScreen
 import com.example.cardwords.ui.packs.PackDetailScreen
 import com.example.cardwords.ui.packs.WordPacksScreen
 import com.example.cardwords.ui.achievements.AchievementsScreen
+import com.example.cardwords.ui.auth.AuthScreen
+import com.example.cardwords.ui.auth.AuthTab
 import com.example.cardwords.ui.game.dungeon.DungeonScreen
 import com.example.cardwords.ui.game.wordfall.WordFallScreen
+import com.example.cardwords.ui.test.TestScreen
 import com.example.cardwords.ui.theme.CardWordsTheme
 
 @Composable
 fun App() {
     CardWordsTheme {
         val navController = rememberNavController()
+        val repository = AppModule.databaseRepository
+        val authManager = AppModule.authManager
+
+        val startRoute: Any = when {
+            authManager.isLoggedIn() && OnboardingManager.isOnboardingCompleted(repository) -> MainRoute
+            authManager.isLoggedIn() -> OnboardingRoute
+            else -> WelcomeRoute
+        }
 
         NavHost(
             navController = navController,
-            startDestination = WelcomeRoute,
+            startDestination = startRoute,
         ) {
             composable<WelcomeRoute> {
-                val repository = AppModule.databaseRepository
                 WelcomeScreen(
                     onStartClick = {
-                        if (OnboardingManager.isOnboardingCompleted(repository)) {
+                        if (authManager.isLoggedIn() && OnboardingManager.isOnboardingCompleted(repository)) {
                             navController.navigate(MainRoute) {
-                                popUpTo<WelcomeRoute> { inclusive = true }
+                                popUpTo(0) { inclusive = true }
                             }
                         } else {
-                            navController.navigate(OnboardingRoute) {
-                                popUpTo<WelcomeRoute> { inclusive = true }
-                            }
+                            navController.navigate(AuthRoute(initialTab = "register"))
                         }
                     },
-                    onLoginClick = { /* TODO: navigate to login screen */ },
+                    onLoginClick = {
+                        navController.navigate(AuthRoute(initialTab = "login"))
+                    },
                 )
             }
 
@@ -72,7 +84,14 @@ fun App() {
             }
 
             composable<MainRoute> {
-                MainScreen(outerNavController = navController)
+                MainScreen(
+                    outerNavController = navController,
+                    onLogout = {
+                        navController.navigate(WelcomeRoute) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                )
             }
 
             composable<StudyModeSelectionRoute> {
@@ -181,6 +200,35 @@ fun App() {
 
             composable<DungeonRoute> {
                 DungeonScreen(
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    },
+                )
+            }
+
+            composable<AuthRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<AuthRoute>()
+                AuthScreen(
+                    initialTab = if (route.initialTab == "register") AuthTab.REGISTER else AuthTab.LOGIN,
+                    onAuthSuccess = {
+                        if (OnboardingManager.isOnboardingCompleted(repository)) {
+                            navController.navigate(MainRoute) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        } else {
+                            navController.navigate(OnboardingRoute) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    },
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    },
+                )
+            }
+
+            composable<TestRoute> {
+                TestScreen(
                     onNavigateBack = {
                         navController.popBackStack()
                     },

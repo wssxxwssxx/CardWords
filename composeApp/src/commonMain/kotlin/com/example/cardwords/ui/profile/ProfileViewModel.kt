@@ -19,6 +19,9 @@ data class ProfileUiState(
     val xpProgress: Pair<Int, Int> = Pair(0, 100),
     val totalReviews: Int = 0,
     val isLoaded: Boolean = false,
+    val userName: String? = null,
+    val userEmail: String? = null,
+    val selectedAvatarId: Int = -1,   // -1 = no avatar chosen (gray placeholder)
 )
 
 class ProfileViewModel : ViewModel() {
@@ -45,9 +48,11 @@ class ProfileViewModel : ViewModel() {
         val totalXp = XpManager.getTotalXp(repository)
         val level = XpManager.levelForXp(totalXp)
         val xpProgress = XpManager.xpProgress(totalXp)
-        val totalReviews = allActivity.sumOf { it.wordsStudied.toInt() }
+        val totalReviews = allActivity.sumOf { it.wordsStudied }
         val masteredCount = minMastery.values.count { it >= MasteryLevels.MASTERED }
 
+        val authManager = AppModule.authManager
+        val avatarId = repository.getSetting("avatar_id")?.toIntOrNull() ?: -1
         _uiState.value = ProfileUiState(
             totalWords = wordCount,
             wordsMastered = masteredCount,
@@ -58,6 +63,18 @@ class ProfileViewModel : ViewModel() {
             xpProgress = xpProgress,
             totalReviews = totalReviews,
             isLoaded = true,
+            userName = authManager.getUserName(),
+            userEmail = authManager.getUserEmail(),
+            selectedAvatarId = avatarId,
         )
+    }
+
+    fun setAvatar(id: Int) {
+        repository.setSetting("avatar_id", id.toString())
+        _uiState.value = _uiState.value.copy(selectedAvatarId = id)
+    }
+
+    fun logout() {
+        AppModule.authManager.logout()
     }
 }

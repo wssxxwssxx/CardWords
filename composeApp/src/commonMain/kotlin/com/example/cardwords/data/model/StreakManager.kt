@@ -9,28 +9,20 @@ object StreakManager {
     private const val SETTING_FREEZE_USED_PREFIX = "freeze_used_"
     private const val FREEZE_MILESTONE_INTERVAL = 7
 
-    fun getAvailableFreezes(repository: DatabaseRepository): Int {
-        return repository.getSettingOrDefault(SETTING_STREAK_FREEZES, "0").toIntOrNull() ?: 0
-    }
+    fun getAvailableFreezes(repository: DatabaseRepository): Int =
+        repository.getSettingOrDefault(SETTING_STREAK_FREEZES, "0").toIntOrNull() ?: 0
 
     fun setAvailableFreezes(repository: DatabaseRepository, count: Int) {
         repository.setSetting(SETTING_STREAK_FREEZES, count.coerceAtLeast(0).toString())
     }
 
-    fun isFreezeUsedOnDate(repository: DatabaseRepository, dateStr: String): Boolean {
-        return repository.getSetting(SETTING_FREEZE_USED_PREFIX + dateStr) != null
-    }
+    fun isFreezeUsedOnDate(repository: DatabaseRepository, dateStr: String): Boolean =
+        repository.getSetting(SETTING_FREEZE_USED_PREFIX + dateStr) != null
 
-    fun getFreezeUsedDates(repository: DatabaseRepository, now: Long, lookbackDays: Int = 60): Set<String> {
-        val result = mutableSetOf<String>()
-        for (i in 0..lookbackDays) {
-            val dateStr = DateUtil.daysAgoFromMillis(now, i)
-            if (isFreezeUsedOnDate(repository, dateStr)) {
-                result.add(dateStr)
-            }
-        }
-        return result
-    }
+    fun getFreezeUsedDates(repository: DatabaseRepository, now: Long, lookbackDays: Int = 60): Set<String> =
+        (0..lookbackDays)
+            .map { DateUtil.daysAgoFromMillis(now, it) }
+            .filterTo(mutableSetOf()) { isFreezeUsedOnDate(repository, it) }
 
     fun computeStreakWithFreeze(
         activeDates: Set<String>,
@@ -41,37 +33,31 @@ object StreakManager {
 
         val todayStr = DateUtil.epochMillisToDateString(now)
         val todayActive = todayStr in activeDates || todayStr in freezeUsedDates
-        var streak = 0
         val startDay = if (todayActive) 0 else 1
+        var streak = 0
 
-        for (i in startDay..365) {
+        for (i in startDay..730) {
             val dateStr = DateUtil.daysAgoFromMillis(now, i)
-            when {
-                dateStr in activeDates -> streak++
-                dateStr in freezeUsedDates -> streak++
-                else -> break
-            }
+            if (dateStr in activeDates || dateStr in freezeUsedDates) streak++ else break
         }
         return streak
     }
 
-    fun shouldUseFreeze(
-        activeDates: Set<String>,
-        now: Long,
-    ): Boolean {
+    fun shouldUseFreeze(activeDates: Set<String>, now: Long): Boolean {
         val yesterdayStr = DateUtil.daysAgoFromMillis(now, 1)
         val dayBeforeStr = DateUtil.daysAgoFromMillis(now, 2)
-        val yesterdayMissed = yesterdayStr !in activeDates
-        val hadStreakBefore = dayBeforeStr in activeDates
-        return yesterdayMissed && hadStreakBefore
+        return yesterdayStr !in activeDates && dayBeforeStr in activeDates
     }
 
     fun applyFreezeIfNeeded(repository: DatabaseRepository, now: Long): Boolean {
-        val allActivity = repository.getAllDailyActivity()
-        val activeDates = allActivity.map { it.date }.toSet()
         val yesterdayStr = DateUtil.daysAgoFromMillis(now, 1)
-
         if (isFreezeUsedOnDate(repository, yesterdayStr)) return false
+
+        val lookbackStr = DateUtil.daysAgoFromMillis(now, 3)
+        val todayStr = DateUtil.epochMillisToDateString(now)
+        val activeDates = repository.getDailyActivityRange(lookbackStr, todayStr)
+            .map { it.date }.toSet()
+
         if (!shouldUseFreeze(activeDates, now)) return false
 
         val available = getAvailableFreezes(repository)
@@ -89,8 +75,7 @@ object StreakManager {
         if (repository.getSetting(milestoneKey) != null) return false
 
         repository.setSetting(milestoneKey, "1")
-        val current = getAvailableFreezes(repository)
-        setAvailableFreezes(repository, current + 1)
+        setAvailableFreezes(repository, getAvailableFreezes(repository) + 1)
         return true
     }
 }

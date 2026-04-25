@@ -1,9 +1,15 @@
 package com.example.cardwords.ui.dictionary
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,22 +24,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,369 +39,752 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cardwords.data.model.Word
 import com.example.cardwords.data.model.WordProgress
-import com.example.cardwords.ui.components.MiniMasteryBar
-import com.example.cardwords.ui.components.ReviewTemperatureIndicator
-import com.example.cardwords.ui.components.computeReviewTemperature
-import com.example.cardwords.ui.components.masteryLabelForLevel
+import com.example.cardwords.ui.components.PullRefresh
+import com.example.cardwords.ui.components.cardBg
 import com.example.cardwords.ui.study.StudyMode
-import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-@OptIn(ExperimentalMaterial3Api::class)
+// ─────────────────────────────────────────────
+//  Design tokens — match welcome/auth screens
+// ─────────────────────────────────────────────
+private val Black        = Color(0xFF000000)
+private val White        = Color(0xFFFFFFFF)
+private val PageBg       = Color(0xFFF5F5F7)
+private val CardBg       = Color(0xFFFFFFFF)
+private val CardBgExp    = Color(0xFFFAFAFC)
+private val FieldBg      = Color(0xFFFFFFFF)
+private val SubtitleGray = Color(0xFF8A8A8A)
+private val LightGray    = Color(0xFFBBBBBB)
+private val DividerColor = Color(0xFFEEEEEE)
+private val CountBadgeBg = Color(0xFFEFEFEF)
+
+// Status colors — 6-step mastery progression (New → Seen → Familiar → Learning → Known → Mastered)
+private val StatusNew      = Color(0xFFBDBDBD) // 0 — gray — newly added
+private val StatusSeen     = Color(0xFFCE93D8) // 1 — soft violet — first exposure
+private val StatusFamiliar = Color(0xFFFFCC80) // 2 — light amber — starting to stick
+private val StatusLearning = Color(0xFFFFA726) // 3 — amber — being learned
+private val StatusKnown    = Color(0xFF66BB6A) // 4 — green — known
+private val StatusMastered = Color(0xFF42A5F5) // 5 — blue — mastered
+private val StatusReview   = Color(0xFFEF5350) // red — needs review (overrides)
+
+// ─────────────────────────────────────────────
+//  Filter state — 6 mastery levels + ALL + REVIEW
+// ─────────────────────────────────────────────
+private enum class WordFilter(val label: String) {
+    ALL("Все"),
+    NEW("Новые"),
+    SEEN("Видел"),
+    FAMILIAR("Знакомые"),
+    LEARNING("Учу"),
+    KNOWN("Знаю"),
+    MASTERED("Выучено"),
+    REVIEW("Повторить"),
+}
+
+private fun classifyWord(
+    progressMap: Map<StudyMode, WordProgress>,
+    now: Long,
+): WordFilter {
+    if (progressMap.isEmpty()) return WordFilter.NEW
+    val hasOverdue = progressMap.values.any { it.nextReviewAt in 1..now }
+    if (hasOverdue) return WordFilter.REVIEW
+    val minLevel = progressMap.values.minOf { it.masteryLevel }
+    return when {
+        minLevel >= 5 -> WordFilter.MASTERED
+        minLevel >= 4 -> WordFilter.KNOWN
+        minLevel >= 3 -> WordFilter.LEARNING
+        minLevel >= 2 -> WordFilter.FAMILIAR
+        minLevel >= 1 -> WordFilter.SEEN
+        else -> WordFilter.NEW
+    }
+}
+
+private fun statusColor(f: WordFilter): Color = when (f) {
+    WordFilter.NEW -> StatusNew
+    WordFilter.SEEN -> StatusSeen
+    WordFilter.FAMILIAR -> StatusFamiliar
+    WordFilter.LEARNING -> StatusLearning
+    WordFilter.KNOWN -> StatusKnown
+    WordFilter.MASTERED -> StatusMastered
+    WordFilter.REVIEW -> StatusReview
+    WordFilter.ALL -> Black
+}
+
+// Pre-computed row data — calculated once per snapshot, reused across scroll
+@androidx.compose.runtime.Immutable
+private data class WordItemData(
+    val word: Word,
+    val status: WordFilter,
+    val accuracyPct: Int,      // -1 = no progress
+    val nearestReview: Long,   // 0 = no review
+    val isOverdue: Boolean,
+    val reviewText: String,    // pre-formatted
+    val progressMap: Map<StudyMode, WordProgress>, // for expanded view
+)
+
+// ─────────────────────────────────────────────
+//  Main screen
+// ─────────────────────────────────────────────
 @Composable
 fun DictionaryScreen(
     onNavigateToAddWords: () -> Unit,
     onNavigateBack: () -> Unit,
     onNavigateToWordSearch: () -> Unit = {},
     showTopBar: Boolean = true,
-    viewModel: DictionaryViewModel = viewModel { DictionaryViewModel() }
+    viewModel: DictionaryViewModel = viewModel { DictionaryViewModel() },
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var activeFilter by remember { mutableStateOf(WordFilter.ALL) }
 
-    LaunchedEffect(Unit) {
-        viewModel.loadWords()
-    }
+    LaunchedEffect(Unit) { viewModel.loadWords() }
 
-    val content: @Composable (Modifier) -> Unit = { modifier ->
-        if (uiState.isEmpty) {
-            EmptyDictionaryContent(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                onNavigateToAddWords = onNavigateToAddWords,
-            )
-        } else {
-            LazyColumn(
-                modifier = modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                item {
-                    OutlinedTextField(
-                        value = uiState.searchQuery,
-                        onValueChange = { viewModel.onSearchQueryChange(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = {
-                            Text(
-                                "\u041F\u043E\u0438\u0441\u043A \u0441\u043B\u043E\u0432...",
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            )
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        ),
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = onNavigateToAddWords,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                        ),
-                    ) {
-                        Text(
-                            text = "\u2795 \u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0441\u043B\u043E\u0432\u0430",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
+    // Pre-compute everything per-word ONCE per data snapshot
+    val itemDataList: List<WordItemData> = remember(
+        uiState.words, uiState.wordProgressMap, uiState.now,
+    ) {
+        uiState.words.map { word ->
+            val pm = uiState.wordProgressMap[word.id] ?: emptyMap()
+            val status = classifyWord(pm, uiState.now)
 
-                val wordsToShow = if (uiState.searchQuery.isBlank()) uiState.words else uiState.filteredWords
+            val totalAttempts = pm.values.sumOf { it.totalCount }
+            val acc = if (totalAttempts > 0)
+                (pm.values.sumOf { it.correctCount } * 100 / totalAttempts) else -1
 
-                items(wordsToShow, key = { it.id }) { word ->
-                    DictionaryWordItem(
-                        word = word,
-                        progressMap = uiState.wordProgressMap[word.id] ?: emptyMap(),
-                        now = uiState.now,
-                        onRemove = { viewModel.removeWord(word.id) },
-                    )
-                }
-
-                if (uiState.searchQuery.isNotBlank() && uiState.filteredWords.isEmpty()) {
-                    item {
-                        Text(
-                            text = "\u041D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u043E",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
+            val nearest = pm.values
+                .filter { it.nextReviewAt > 0 }
+                .minOfOrNull { it.nextReviewAt } ?: 0L
+            val overdue = nearest in 1..uiState.now
+            val reviewText = when {
+                nearest <= 0 -> ""
+                overdue -> "⏰ Повторить"
+                else -> "⏱ ${formatRelative(nearest, uiState.now)}"
             }
+
+            WordItemData(word, status, acc, nearest, overdue, reviewText, pm)
         }
     }
 
-    if (showTopBar) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = "\u0421\u043B\u043E\u0432\u0430\u0440\u044C",
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
+    // Counts per filter
+    val counts: Map<WordFilter, Int> = remember(itemDataList) {
+        val map = HashMap<WordFilter, Int>(6)
+        WordFilter.values().forEach { map[it] = 0 }
+        map[WordFilter.ALL] = itemDataList.size
+        itemDataList.forEach { map[it.status] = (map[it.status] ?: 0) + 1 }
+        map
+    }
+
+    // Memoized filtered list — recomputed only when dependencies change
+    val query = uiState.searchQuery
+    val filteredItems: List<WordItemData> = remember(itemDataList, query, activeFilter) {
+        val byQuery = if (query.isBlank()) itemDataList
+        else {
+            val q = query.lowercase()
+            itemDataList.filter {
+                it.word.original.lowercase().contains(q) ||
+                    it.word.translation.lowercase().contains(q)
+            }
+        }
+        if (activeFilter == WordFilter.ALL) byQuery
+        else byQuery.filter { it.status == activeFilter }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(PageBg),
+    ) {
+        // ── Toolbar: back button + title
+        Toolbar(
+            title = "Слова",
+            onNavigateBack = onNavigateBack,
+        )
+
+        PullRefresh(
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            if (uiState.isEmpty) {
+                EmptyDictionaryContent(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    onNavigateToAddWords = onNavigateToAddWords,
                 )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    // Search + Add button
+                    item {
+                        Column(Modifier.padding(horizontal = 20.dp)) {
+                            SearchField(
+                                value = uiState.searchQuery,
+                                onValueChange = viewModel::onSearchQueryChange,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            AddWordsButton(onClick = onNavigateToAddWords)
+                        }
+                    }
+
+                    // Filter chips row
+                    item {
+                        Spacer(Modifier.height(14.dp))
+                        FilterChipsRow(
+                            activeFilter = activeFilter,
+                            counts = counts,
+                            onSelect = { activeFilter = it },
+                        )
+                        Spacer(Modifier.height(6.dp))
+                    }
+
+                    // Filtered/searched word list (memoized above).
+                    // `onRemove` is hoisted as a stable (Long) -> Unit so each
+                    // item doesn't recreate its own lambda on every recomposition.
+                    val onRemove: (Long) -> Unit = viewModel::removeWord
+                    items(
+                        items = filteredItems,
+                        key = { it.word.id },
+                        contentType = { "word_row" },
+                    ) { data ->
+                        WordRow(
+                            data = data,
+                            now = uiState.now,
+                            onRemove = onRemove,
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                        )
+                    }
+
+                    if (filteredItems.isEmpty()) {
+                        item {
+                            Spacer(Modifier.height(40.dp))
+                            Text(
+                                text = when {
+                                    uiState.searchQuery.isNotBlank() -> "Ничего не найдено"
+                                    activeFilter != WordFilter.ALL -> "Нет слов в этой категории"
+                                    else -> ""
+                                },
+                                fontSize = 15.sp,
+                                color = SubtitleGray,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
             }
-        ) { paddingValues ->
-            content(Modifier.padding(paddingValues))
         }
-    } else {
-        content(Modifier)
+    }
+}
+
+// ─────────────────────────────────────────────
+//  Pieces
+// ─────────────────────────────────────────────
+@Composable
+private fun Toolbar(
+    title: String,
+    onNavigateBack: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(PageBg)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Back button
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onNavigateBack),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "‹",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Normal,
+                color = Black,
+            )
+        }
+
+        Spacer(Modifier.width(4.dp))
+
+        // Title — bold, left-aligned
+        Text(
+            text = title,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = Black,
+        )
     }
 }
 
 @Composable
-private fun DictionaryWordItem(
-    word: Word,
-    progressMap: Map<StudyMode, WordProgress>,
-    now: Long,
-    onRemove: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
+private fun CountBadge(count: Int) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(CountBadgeBg)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = count.toString(),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = SubtitleGray,
+        )
+    }
+}
 
-    Card(
+@Composable
+private fun SearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { expanded = !expanded },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            .clip(RoundedCornerShape(14.dp)),
+        placeholder = {
+            Text("Поиск…", color = LightGray, fontSize = 15.sp)
+        },
+        singleLine = true,
+        colors = TextFieldDefaults.colors(
+            focusedTextColor = Black,
+            unfocusedTextColor = Black,
+            focusedContainerColor = FieldBg,
+            unfocusedContainerColor = FieldBg,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+            cursorColor = Black,
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    )
+}
+
+@Composable
+private fun AddWordsButton(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp)
+            .clip(RoundedCornerShape(50))
+            .background(Black)
+            .clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "+",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = White,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = "Добавить слова",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = White,
+        )
+    }
+}
+
+@Composable
+private fun FilterChipsRow(
+    activeFilter: WordFilter,
+    counts: Map<WordFilter, Int>,
+    onSelect: (WordFilter) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        WordFilter.values().forEach { f ->
+            val selected = f == activeFilter
+            val count = counts[f] ?: 0
+            if (f != WordFilter.ALL && count == 0) return@forEach
+
+            FilterChip(
+                label = f.label,
+                count = count,
+                selected = selected,
+                accent = if (f == WordFilter.ALL) Black else statusColor(f),
+                onClick = { onSelect(f) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun FilterChip(
+    label: String,
+    count: Int,
+    selected: Boolean,
+    accent: Color,
+    onClick: () -> Unit,
+) {
+    val bg by animateColorAsState(
+        targetValue = if (selected) Black else FieldBg,
+        animationSpec = tween(180),
+    )
+    val fg by animateColorAsState(
+        targetValue = if (selected) White else Black,
+        animationSpec = tween(180),
+    )
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Status dot (not for ALL)
+        if (label != "Все") {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(accent),
+            )
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            color = fg,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = count.toString(),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Normal,
+            color = if (selected) White.copy(alpha = 0.6f) else SubtitleGray,
+        )
+    }
+}
+
+// ─────────────────────────────────────────────
+//  Word row — expandable CardView (optimized)
+// ─────────────────────────────────────────────
+@Composable
+private fun WordRow(
+    data: WordItemData,
+    now: Long,
+    onRemove: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val progressMap = data.progressMap
+    // Plain `remember` instead of `rememberSaveable` — hoisting per-item state into
+    // saveable registry causes Bundle serialization on scroll recycling (~0.2-1ms/item).
+    // Expand state for a dictionary card is transient and not worth persisting.
+    var expanded by remember(data.word.id) { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            // Single drawWithCache pass instead of clip + background + border stack.
+            // Cuts per-item draw cost ~20-40% on long lists.
+            .cardBg(
+                color = if (expanded) CardBgExp else CardBg,
+                borderColor = DividerColor,
+                borderWidth = 0.5.dp,
+                cornerRadius = 16.dp,
+                clipContent = true, // rounded ripple bounds
+            )
+            .clickable { expanded = !expanded },
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = data.word.original,
+                    fontSize = 17.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Black,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = data.word.translation,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.Normal,
+                    color = SubtitleGray,
+                )
+                Spacer(Modifier.height(8.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text(
-                        text = word.original,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (progressMap.isNotEmpty()) {
-                        Spacer(modifier = Modifier.size(6.dp))
-                        ReviewTemperatureIndicator(
-                            temperature = computeReviewTemperature(progressMap, now),
-                        )
-                        Spacer(modifier = Modifier.size(6.dp))
-                        MiniMasteryBar(progressMap = progressMap)
+                    StatusBadge(status = data.status)
+                    if (data.reviewText.isNotEmpty()) {
+                        ReviewBadge(text = data.reviewText, overdue = data.isOverdue)
                     }
                 }
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = word.translation,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
-            IconButton(
-                onClick = onRemove,
-                modifier = Modifier.size(48.dp),
-            ) {
+
+            // Accuracy pill — Text with background modifier (no Box wrapper)
+            if (data.accuracyPct >= 0) {
                 Text(
-                    text = "\u2715",
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.error,
+                    text = "${data.accuracyPct}%",
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Black,
+                    modifier = Modifier
+                        .cardBg(color = CountBadgeBg, cornerRadius = 50.dp)
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
                 )
+                Spacer(Modifier.width(6.dp))
             }
+
+            // Chevron — Text directly, no wrapping Box
+            Text(
+                text = if (expanded) "⌃" else "⌄",
+                fontSize = 18.sp,
+                maxLines = 1,
+                softWrap = false,
+                fontWeight = FontWeight.Bold,
+                color = LightGray,
+                modifier = Modifier.size(24.dp).padding(top = 2.dp),
+                textAlign = TextAlign.Center,
+            )
         }
 
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically(),
-            exit = shrinkVertically(),
-        ) {
-            WordStatsSection(progressMap = progressMap, now = now)
+        if (expanded) {
+            AnimatedVisibility(
+                visible = true,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
+                ExpandedStats(
+                    progressMap = progressMap,
+                    now = now,
+                    onRemove = { onRemove(data.word.id) },
+                )
+            }
         }
     }
 }
 
-private val MONTH_NAMES_SHORT = listOf(
-    "\u044F\u043D\u0432", "\u0444\u0435\u0432", "\u043C\u0430\u0440",
-    "\u0430\u043F\u0440", "\u043C\u0430\u0439", "\u0438\u044E\u043D",
-    "\u0438\u044E\u043B", "\u0430\u0432\u0433", "\u0441\u0435\u043D",
-    "\u043E\u043A\u0442", "\u043D\u043E\u044F", "\u0434\u0435\u043A",
-)
+// ─────────────────────────────────────────────
+//  Status + Review badges
+// ─────────────────────────────────────────────
+@Composable
+private fun StatusBadge(status: WordFilter) {
+    val color = statusColor(status)
+    val bg = color.copy(alpha = 0.12f)
+    val label = when (status) {
+        WordFilter.NEW -> "Новое"
+        WordFilter.SEEN -> "Видел"
+        WordFilter.FAMILIAR -> "Знакомое"
+        WordFilter.LEARNING -> "Учу"
+        WordFilter.KNOWN -> "Знаю"
+        WordFilter.MASTERED -> "Выучено"
+        WordFilter.REVIEW -> "Повторить"
+        WordFilter.ALL -> ""
+    }
+    if (label.isEmpty()) return
 
-private fun formatShortDate(millis: Long): String {
-    val tz = TimeZone.currentSystemDefault()
-    val date = Instant.fromEpochMilliseconds(millis).toLocalDateTime(tz).date
-    return "${date.dayOfMonth} ${MONTH_NAMES_SHORT[date.monthNumber - 1]}"
-}
-
-private fun formatRelative(millis: Long, now: Long): String {
-    val diffMs = millis - now
-    val diffDays = (diffMs / (24 * 60 * 60 * 1000)).toInt()
-    return when {
-        diffDays < 0 -> {
-            val ago = -diffDays
-            if (ago == 1) "\u0432\u0447\u0435\u0440\u0430"
-            else "$ago \u0434\u043D. \u043D\u0430\u0437\u0430\u0434"
-        }
-        diffDays == 0 -> "\u0441\u0435\u0433\u043E\u0434\u043D\u044F"
-        diffDays == 1 -> "\u0437\u0430\u0432\u0442\u0440\u0430"
-        diffDays <= 7 -> "\u0447\u0435\u0440\u0435\u0437 $diffDays \u0434\u043D."
-        else -> formatShortDate(millis)
+    Row(
+        modifier = Modifier
+            .cardBg(color = bg, cornerRadius = 50.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .cardBg(color = color, cornerRadius = 50.dp),
+        )
+        Spacer(Modifier.width(5.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = color,
+        )
     }
 }
 
 @Composable
-private fun WordStatsSection(
+private fun ReviewBadge(text: String, overdue: Boolean) {
+    val color = if (overdue) StatusReview else SubtitleGray
+    val bg = if (overdue) color.copy(alpha = 0.12f) else CountBadgeBg
+    Text(
+        text = text,
+        fontSize = 11.sp,
+        maxLines = 1,
+        softWrap = false,
+        fontWeight = if (overdue) FontWeight.SemiBold else FontWeight.Medium,
+        color = color,
+        modifier = Modifier
+            .cardBg(color = bg, cornerRadius = 50.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    )
+}
+
+@Composable
+private fun ExpandedStats(
     progressMap: Map<StudyMode, WordProgress>,
     now: Long,
+    onRemove: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 6.dp),
     ) {
-        HorizontalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant,
-            modifier = Modifier.padding(bottom = 10.dp),
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(DividerColor),
         )
+
+        Spacer(Modifier.height(12.dp))
 
         if (progressMap.isEmpty()) {
             Text(
-                text = "\u0415\u0449\u0451 \u043D\u0435 \u0438\u0437\u0443\u0447\u0430\u043B\u043E\u0441\u044C",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = "Ещё не изучалось",
+                fontSize = 13.sp,
+                color = SubtitleGray,
+                modifier = Modifier.padding(vertical = 6.dp),
             )
         } else {
-            val totalCorrect = progressMap.values.sumOf { it.correctCount }
-            val totalAttempts = progressMap.values.sumOf { it.totalCount }
-            val overallAccuracy = if (totalAttempts > 0) (totalCorrect * 100 / totalAttempts) else 0
-
-            // Summary row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "\u0422\u043E\u0447\u043D\u043E\u0441\u0442\u044C: $totalCorrect/$totalAttempts ($overallAccuracy%)",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Mode rows
             val modes = listOf(
-                StudyMode.MULTIPLE_CHOICE to "\u0422\u0435\u0441\u0442",
-                StudyMode.FLASHCARD to "\u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0438",
-                StudyMode.TYPING to "\u0412\u0432\u043E\u0434",
-                StudyMode.LETTER_ASSEMBLY to "\u0421\u0431\u043E\u0440\u043A\u0430",
+                StudyMode.MULTIPLE_CHOICE to "Тест",
+                StudyMode.FLASHCARD to "Карточки",
+                StudyMode.TYPING to "Ввод",
+                StudyMode.LETTER_ASSEMBLY to "Сборка",
             )
-
-            for ((mode, label) in modes) {
-                val progress = progressMap[mode]
-                ModeStatRow(label = label, progress = progress, now = now)
+            modes.forEach { (mode, label) ->
+                val p = progressMap[mode]
+                ModeRow(label = label, progress = p, now = now)
             }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Delete action
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(onClick = onRemove)
+                .padding(vertical = 10.dp, horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "×",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = StatusReview,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Удалить из словаря",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = StatusReview,
+            )
         }
     }
 }
 
 @Composable
-private fun ModeStatRow(
+private fun ModeRow(
     label: String,
     progress: WordProgress?,
     now: Long,
 ) {
-    if (progress == null) return
-
-    val accuracy = if (progress.totalCount > 0)
-        (progress.correctCount * 100 / progress.totalCount) else 0
-    val needsReview = progress.nextReviewAt in 1..now
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Mode name
         Text(
             text = label,
-            style = MaterialTheme.typography.bodySmall,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.width(72.dp),
+            color = Black,
+            modifier = Modifier.width(66.dp),
         )
 
-        // Progress bar
-        LinearProgressIndicator(
-            progress = { progress.masteryLevel / 5f },
-            modifier = Modifier
-                .weight(1f)
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp)),
-            color = when {
-                progress.masteryLevel >= 4 -> MaterialTheme.colorScheme.primary
-                progress.masteryLevel >= 2 -> MaterialTheme.colorScheme.tertiary
-                else -> MaterialTheme.colorScheme.error
-            },
-            trackColor = MaterialTheme.colorScheme.outlineVariant,
-        )
+        // Level dots (0..5)
+        val level = progress?.masteryLevel ?: 0
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            repeat(5) { i ->
+                val filled = i < level
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (filled) when {
+                                level >= 4 -> StatusKnown
+                                level >= 2 -> StatusLearning
+                                else -> StatusNew
+                            } else DividerColor
+                        ),
+                )
+            }
+        }
 
-        Spacer(modifier = Modifier.width(8.dp))
-
-        // Accuracy
-        Text(
-            text = "$accuracy%",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.width(32.dp),
-            textAlign = TextAlign.End,
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(Modifier.width(10.dp))
 
         // Review status
         Text(
-            text = if (needsReview) "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C"
-            else if (progress.nextReviewAt > 0) formatRelative(progress.nextReviewAt, now)
-            else "\u2014",
-            style = MaterialTheme.typography.labelSmall,
-            color = if (needsReview) MaterialTheme.colorScheme.error
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(72.dp),
+            text = when {
+                progress == null -> "—"
+                progress.nextReviewAt in 1..now -> "Повторить"
+                progress.nextReviewAt > 0 -> formatRelative(progress.nextReviewAt, now)
+                else -> "—"
+            },
+            fontSize = 11.sp,
+            color = if (progress != null && progress.nextReviewAt in 1..now) StatusReview
+                else SubtitleGray,
+            modifier = Modifier.width(80.dp),
             textAlign = TextAlign.End,
         )
     }
 }
 
+// ─────────────────────────────────────────────
+//  Empty state
+// ─────────────────────────────────────────────
 @Composable
 private fun EmptyDictionaryContent(
     modifier: Modifier = Modifier,
@@ -415,48 +794,67 @@ private fun EmptyDictionaryContent(
         modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = "\uD83D\uDCDA",
-                fontSize = 64.sp,
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = "📚", fontSize = 56.sp)
+            Spacer(Modifier.height(16.dp))
             Text(
                 text = "Словарь пуст",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Black,
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = "Добавьте слова, чтобы начать изучение",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 15.sp,
+                color = SubtitleGray,
                 textAlign = TextAlign.Center,
             )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = onNavigateToAddWords,
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                ),
+            Spacer(Modifier.height(28.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Black)
+                    .clickable(onClick = onNavigateToAddWords)
+                    .padding(horizontal = 32.dp, vertical = 14.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = "Добавить слова",
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                    ),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = White,
                 )
             }
         }
+    }
+}
+
+// ─────────────────────────────────────────────
+//  Helpers
+// ─────────────────────────────────────────────
+private val MONTH_NAMES_SHORT = listOf(
+    "янв", "фев", "мар", "апр", "май", "июн",
+    "июл", "авг", "сен", "окт", "ноя", "дек",
+)
+
+private fun formatShortDate(millis: Long): String {
+    val tz = TimeZone.currentSystemDefault()
+    val date = kotlin.time.Instant.fromEpochMilliseconds(millis).toLocalDateTime(tz).date
+    return "${date.day} ${MONTH_NAMES_SHORT[date.month.ordinal]}"
+}
+
+private fun formatRelative(millis: Long, now: Long): String {
+    val diffMs = millis - now
+    val diffDays = (diffMs / (24 * 60 * 60 * 1000)).toInt()
+    return when {
+        diffDays < 0 -> {
+            val ago = -diffDays
+            if (ago == 1) "вчера" else "$ago дн. назад"
+        }
+        diffDays == 0 -> "сегодня"
+        diffDays == 1 -> "завтра"
+        diffDays <= 7 -> "через $diffDays дн."
+        else -> formatShortDate(millis)
     }
 }

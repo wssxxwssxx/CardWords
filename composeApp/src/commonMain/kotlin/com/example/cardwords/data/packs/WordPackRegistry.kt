@@ -13,6 +13,8 @@ object WordPackRegistry {
         BusinessPack,
         EverydayLifePack,
         PhrasesIdiomsPack,
+        IrregularVerbsBasicPack,
+        IrregularVerbsExtendedPack,
     )
 
     val byLevel: List<WordPack> get() = allPacks.filter { it.level == PackLevel.BY_LEVEL }

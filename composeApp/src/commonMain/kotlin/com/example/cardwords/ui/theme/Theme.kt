@@ -6,6 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
@@ -58,6 +59,17 @@ val Orange40 = Color(0xFFF97316)
 val Orange60 = Color(0xFFFB923C)
 
 // ═══════════════════════════════════════════════════════════════
+// Light palette — Figma "Home Minimal Redesign" (#F5F5F7 base)
+// ═══════════════════════════════════════════════════════════════
+val LightBg          = Color(0xFFF5F5F7)   // page background
+val LightCard        = Color(0xFFFFFFFF)   // card background
+val LightFg          = Color(0xFF1D1D1F)   // primary text / dark
+val LightFgSecondary = Color(0xFF86868B)   // secondary text
+val LightFgMuted     = Color(0xFFC7C7CC)   // muted / inactive
+val LightDotActive   = Color(0xFF34C759)   // green — streak dot
+val LightProgressBar = Color(0xFF007AFF)   // iOS blue — progress bar
+
+// ═══════════════════════════════════════════════════════════════
 // Surface hierarchy — deep slate tones
 // ═══════════════════════════════════════════════════════════════
 val Surface0 = Color(0xFF0F172A)         // base background (deep navy)
@@ -105,10 +117,11 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 // ═══════════════════════════════════════════════════════════════
-// Typography — tight letter-spacing, premium feel
+// Typography — Inter font family, tight letter-spacing
 // ═══════════════════════════════════════════════════════════════
-private val AppTypography = Typography(
+private fun appTypography(f: FontFamily) = Typography(
     headlineLarge = TextStyle(
+        fontFamily = f,
         fontWeight = FontWeight.Bold,
         fontSize = 28.sp,
         lineHeight = 34.sp,
@@ -116,6 +129,7 @@ private val AppTypography = Typography(
         color = TextHeading,
     ),
     headlineMedium = TextStyle(
+        fontFamily = f,
         fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
         lineHeight = 29.sp,
@@ -123,6 +137,7 @@ private val AppTypography = Typography(
         color = TextHeading,
     ),
     headlineSmall = TextStyle(
+        fontFamily = f,
         fontWeight = FontWeight.SemiBold,
         fontSize = 20.sp,
         lineHeight = 24.sp,
@@ -130,54 +145,63 @@ private val AppTypography = Typography(
         color = TextHeading,
     ),
     titleLarge = TextStyle(
-        fontWeight = FontWeight.SemiBold,
+        fontFamily = f,
+        fontWeight = FontWeight.Bold,
         fontSize = 20.sp,
         lineHeight = 24.sp,
         letterSpacing = (-0.3).sp,
     ),
     titleMedium = TextStyle(
-        fontWeight = FontWeight.Medium,
+        fontFamily = f,
+        fontWeight = FontWeight.Bold,
         fontSize = 16.sp,
         lineHeight = 22.sp,
         letterSpacing = (-0.2).sp,
     ),
     titleSmall = TextStyle(
-        fontWeight = FontWeight.Medium,
+        fontFamily = f,
+        fontWeight = FontWeight.Bold,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = (-0.2).sp,
     ),
     bodyLarge = TextStyle(
+        fontFamily = f,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 22.sp,
         letterSpacing = (-0.2).sp,
     ),
     bodyMedium = TextStyle(
+        fontFamily = f,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = (-0.2).sp,
     ),
     bodySmall = TextStyle(
+        fontFamily = f,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 17.sp,
         letterSpacing = (-0.1).sp,
     ),
     labelLarge = TextStyle(
+        fontFamily = f,
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = (-0.1).sp,
     ),
     labelMedium = TextStyle(
+        fontFamily = f,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = (-0.1).sp,
     ),
     labelSmall = TextStyle(
+        fontFamily = f,
         fontWeight = FontWeight.Medium,
         fontSize = 10.sp,
         lineHeight = 14.sp,
@@ -188,9 +212,10 @@ private val AppTypography = Typography(
 fun CardWordsTheme(
     content: @Composable () -> Unit,
 ) {
+    val inter = interFontFamily()
     MaterialTheme(
         colorScheme = DarkColorScheme,
-        typography = AppTypography,
-        content = content,
+        typography  = appTypography(inter),
+        content     = content,
     )
 }

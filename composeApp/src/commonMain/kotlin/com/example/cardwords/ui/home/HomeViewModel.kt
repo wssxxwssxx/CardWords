@@ -13,7 +13,6 @@ import com.example.cardwords.di.AppModule
 import com.example.cardwords.util.DateUtil
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.datetime.DayOfWeek
-import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +39,7 @@ data class HomeUiState(
     val todayWordsStudied: Int = 0,
     val totalReviews: Int = 0,
     val greetingTime: String = "day", // "morning", "day", "evening", "night"
+    val userName: String? = null,
     // Engagement features
     val dailyGoalProgress: DailyGoalProgress = DailyGoalProgress(10, 0, 0f, false),
     val totalXp: Int = 0,
@@ -134,6 +134,9 @@ class HomeViewModel : ViewModel() {
         // Dungeon highest floor
         val dungeonHighestFloor = repository.getSetting("dungeon_highest_floor")?.toIntOrNull() ?: 0
 
+        // User name from auth
+        val userName = AppModule.authManager.getUserName()
+
         _uiState.value = HomeUiState(
             wordCount = wordCount,
             currentStreak = currentStreak,
@@ -157,6 +160,7 @@ class HomeViewModel : ViewModel() {
             weeklyAccuracy = weeklyAccuracy,
             weeklyTimeMinutes = weeklyTimeMinutes,
             dungeonHighestFloor = dungeonHighestFloor,
+            userName = userName,
         )
     }
 
@@ -164,7 +168,7 @@ class HomeViewModel : ViewModel() {
         val todayStr = DateUtil.epochMillisToDateString(now)
         val dayLabels = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
         // Day-of-week using local timezone
-        val instant = Instant.fromEpochMilliseconds(now)
+        val instant = kotlin.time.Instant.fromEpochMilliseconds(now)
         val localDate = instant.toLocalDateTime(TimeZone.currentSystemDefault()).date
         val todayDow = localDate.dayOfWeek.ordinal // MONDAY=0..SUNDAY=6
         // Build 7-day list starting from Monday of this week
@@ -188,7 +192,7 @@ class HomeViewModel : ViewModel() {
     )
 
     private fun computeGreetingTime(now: Long): String {
-        val instant = Instant.fromEpochMilliseconds(now)
+        val instant = kotlin.time.Instant.fromEpochMilliseconds(now)
         val hourOfDay = instant.toLocalDateTime(TimeZone.currentSystemDefault()).hour
         return when {
             hourOfDay < 6 -> "night"

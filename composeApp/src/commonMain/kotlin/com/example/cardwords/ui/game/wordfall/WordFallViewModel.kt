@@ -153,7 +153,7 @@ class WordFallViewModel : ViewModel() {
 
             _uiState.update { st ->
                 st.copy(
-                    activeWords = st.activeWords.filter { it.id != matchedWord!!.id },
+                    activeWords = st.activeWords.filter { it.id != matchedWord.id },
                     destroyedEffects = st.destroyedEffects + effect,
                     score = st.score + points,
                     combo = newCombo,
@@ -185,8 +185,9 @@ class WordFallViewModel : ViewModel() {
         val active = mutableListOf<FallingWord>()
 
         for (fw in state.activeWords) {
-            val progress = ((frameTimeMs - fw.startTimeMs).toFloat() / fw.fallDurationMs)
-                .coerceIn(0f, 1f)
+            val progress = if (fw.fallDurationMs > 0) {
+                ((frameTimeMs - fw.startTimeMs).toFloat() / fw.fallDurationMs).coerceIn(0f, 1f)
+            } else 1f
             if (progress >= 1f) {
                 fallen.add(fw)
             } else {

@@ -3,7 +3,7 @@ package com.example.cardwords.ui.addwords
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cardwords.data.model.Word
-import com.example.cardwords.data.remote.FetchedWordResult
+import com.example.cardwords.data.remote.CardResponse
 import com.example.cardwords.di.AppModule
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed interface ApiSearchResult {
-    data class Found(val word: FetchedWordResult) : ApiSearchResult
+    data class Found(val card: CardResponse) : ApiSearchResult
     data object NotFound : ApiSearchResult
 }
 
@@ -39,7 +39,8 @@ data class WordSelectionUiState(
 class WordSelectionViewModel : ViewModel() {
 
     private val repository = AppModule.databaseRepository
-    private val apiClient = AppModule.wordApiClient
+    private val apiClient = AppModule.cardWordsApiClient
+    private val authManager = AppModule.authManager
 
     private val _uiState = MutableStateFlow(WordSelectionUiState())
     val uiState: StateFlow<WordSelectionUiState> = _uiState.asStateFlow()
@@ -75,25 +76,36 @@ class WordSelectionViewModel : ViewModel() {
         val query = _uiState.value.searchQuery.trim()
         if (query.isBlank()) return
 
+        val token = authManager.getToken()
+        if (token == null) {
+            _uiState.update { it.copy(apiError = "Войдите в аккаунт для онлайн-поиска") }
+            return
+        }
+
         _uiState.update { it.copy(isApiSearching = true, apiSearchResult = null, apiError = null) }
 
         viewModelScope.launch {
-            val result = apiClient.fetchWordWithTranslation(query)
+            val result = apiClient.createCard(token, query)
             result.fold(
-                onSuccess = { fetched ->
+                onSuccess = { card ->
                     _uiState.update {
                         it.copy(
                             isApiSearching = false,
-                            apiSearchResult = ApiSearchResult.Found(fetched),
+                            apiSearchResult = ApiSearchResult.Found(card),
                         )
                     }
                 },
                 onFailure = { error ->
+                    val msg = when {
+                        error.message?.contains("402") == true -> "Лимит карточек (Free план)"
+                        error.message?.contains("422") == true -> "Перевод не найден"
+                        else -> error.message ?: "Ошибка поиска"
+                    }
                     _uiState.update {
                         it.copy(
                             isApiSearching = false,
                             apiSearchResult = ApiSearchResult.NotFound,
-                            apiError = error.message,
+                            apiError = msg,
                         )
                     }
                 },
@@ -101,17 +113,17 @@ class WordSelectionViewModel : ViewModel() {
         }
     }
 
-    fun addApiWord(fetched: FetchedWordResult) {
-        val existing = repository.findByOriginal(fetched.original)
+    fun addApiWord(card: CardResponse) {
+        val existing = repository.findByOriginal(card.wordOriginal)
         val wordId = if (existing != null) {
             existing.id
         } else {
             repository.insertWord(
                 Word(
                     id = 0,
-                    original = fetched.original,
-                    translation = fetched.translation,
-                    transcription = fetched.transcription,
+                    original = card.wordOriginal,
+                    translation = card.wordTranslation,
+                    transcription = "",
                     source = "api",
                 )
             )
@@ -175,6 +187,15 @@ class WordSelectionViewModel : ViewModel() {
             repository.insertWord(word)
         }
         repository.addToDictionary(wordId)
+
+        // Also send to server if logged in
+        val token = authManager.getToken()
+        if (token != null) {
+            viewModelScope.launch {
+                apiClient.createCard(token, word.original, word.translation)
+            }
+        }
+
         _uiState.update {
             it.copy(
                 customOriginal = "",

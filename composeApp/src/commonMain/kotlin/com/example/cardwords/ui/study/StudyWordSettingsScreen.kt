@@ -1,12 +1,11 @@
 package com.example.cardwords.ui.study
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,17 +30,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,17 +40,53 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cardwords.data.model.Word
 import com.example.cardwords.data.packs.WordPackRegistry
 import com.example.cardwords.di.AppModule
+import com.example.cardwords.ui.theme.LightBg
+import com.example.cardwords.ui.theme.LightCard
+import com.example.cardwords.ui.theme.LightFg
+import com.example.cardwords.ui.theme.LightFgMuted
+import com.example.cardwords.ui.theme.LightFgSecondary
+import com.example.cardwords.ui.theme.LightProgressBar
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+// ─────────────────────────────────────────────
+//  SVG paths (viewBox 20×20)
+// ─────────────────────────────────────────────
+private object SettingsIconPaths {
+    // Book — Frame (11)
+    val BOOK_COVER = "M15 2H5C3.89543 2 3 2.89543 3 4V16C3 17.1046 3.89543 18 5 18H15C16.1046 18 17 17.1046 17 16V4C17 2.89543 16.1046 2 15 2Z"
+    val BOOK_SPINE = "M7 2V18"
+    val BOOK_L1    = "M10 7H14"
+    val BOOK_L2    = "M10 11H14"
+    // Numbered list — Frame (12)
+    val LIST_L1    = "M8 5H17"
+    val LIST_L2    = "M8 10H17"
+    val LIST_L3    = "M8 15H17"
+    val LIST_C1A   = "M3 5L4 6"
+    val LIST_C1B   = "M4 6L6 3.5"
+    val LIST_C2A   = "M3 10L4 11"
+    val LIST_C2B   = "M4 11L6 8.5"
+    val LIST_CIRC  = "M4.49995 16.8C5.49406 16.8 6.29995 15.9941 6.29995 15C6.29995 14.0059 5.49406 13.2 4.49995 13.2C3.50584 13.2 2.69995 14.0059 2.69995 15C2.69995 15.9941 3.50584 16.8 4.49995 16.8Z"
+}
+
+// ─────────────────────────────────────────────
+//  Screen
+// ─────────────────────────────────────────────
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StudyWordSettingsScreen(
     multipleChoice: Boolean,
@@ -70,467 +96,499 @@ fun StudyWordSettingsScreen(
     onStartStudy: (wordCount: Int, wordSource: String, wordIds: String) -> Unit,
     onNavigateBack: () -> Unit,
 ) {
-    var selectedWordCount by remember { mutableStateOf(0) } // 0 = all
-    var selectedSource by remember { mutableStateOf("") }
-    var selectedWordIds by remember { mutableStateOf(setOf<Long>()) }
+    var selectedWordCount    by remember { mutableStateOf(0) }
+    var selectedSource       by remember { mutableStateOf("") }
+    var selectedWordIds      by remember { mutableStateOf(setOf<Long>()) }
+    var isSourceExpanded     by remember { mutableStateOf(false) }
     var isWordPickerExpanded by remember { mutableStateOf(false) }
 
-    val repository = AppModule.databaseRepository
-    val totalDictionaryCount = remember {
-        repository.getDictionaryWordCount()
-    }
-    val availablePacks = remember {
-        WordPackRegistry.allPacks.filter { pack ->
-            repository.getDictionaryWordCountBySource(pack.sourceTag) > 0
-        }
+    val repository           = AppModule.databaseRepository
+    val totalDictionaryCount = remember { repository.getDictionaryWordCount() }
+    val availablePacks       = remember {
+        WordPackRegistry.allPacks.filter { repository.getDictionaryWordCountBySource(it.sourceTag) > 0 }
     }
     val packWordCounts = remember(availablePacks) {
-        availablePacks.associate { pack ->
-            pack.sourceTag to repository.getDictionaryWordCountBySource(pack.sourceTag)
-        }
+        availablePacks.associate { it.sourceTag to repository.getDictionaryWordCountBySource(it.sourceTag) }
     }
-
-    // Words for the current source (for the picker)
     val sourceWords = remember(selectedSource) {
-        if (selectedSource.isEmpty()) {
-            repository.getDictionaryWords()
-        } else {
-            repository.getDictionaryWordsBySource(selectedSource)
-        }
+        if (selectedSource.isEmpty()) repository.getDictionaryWords()
+        else repository.getDictionaryWordsBySource(selectedSource)
     }
-
     val sourceWordCount = sourceWords.size.toLong()
-
-    val effectiveCount = when {
+    val effectiveCount  = when {
         selectedWordIds.isNotEmpty() -> selectedWordIds.size.toLong()
-        selectedWordCount == 0 -> sourceWordCount
-        else -> minOf(selectedWordCount.toLong(), sourceWordCount)
+        selectedWordCount == 0       -> sourceWordCount
+        else                         -> minOf(selectedWordCount.toLong(), sourceWordCount)
     }
 
-    // Build selected modes summary text
     val modeNames = buildList {
         if (multipleChoice) add("Тест")
-        if (flashcard) add("Карточки")
-        if (typing) add("Ввод")
+        if (flashcard)      add("Карточки")
+        if (typing)         add("Ввод")
         if (letterAssembly) add("Сборка")
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Настройки сессии",
-                        fontWeight = FontWeight.SemiBold,
+    val currentSourceLabel = when {
+        selectedSource.isEmpty() -> "Все слова"
+        else -> availablePacks.firstOrNull { it.sourceTag == selectedSource }
+            ?.let { "${it.emoji} ${it.title}" } ?: "Все слова"
+    }
+    val currentSourceCount = when {
+        selectedSource.isEmpty() -> totalDictionaryCount
+        else -> packWordCounts[selectedSource] ?: 0
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(LightBg)
+            .safeContentPadding(),
+    ) {
+        Spacer(Modifier.height(8.dp))
+
+        // ── Header ───────────────────────────────────
+        Row(
+            modifier          = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier         = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .clickable { onNavigateBack() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Canvas(Modifier.size(20.dp)) {
+                    val s = size.width / 24f
+                    drawPath(
+                        path = Path().apply {
+                            moveTo(14f * s, 5f * s)
+                            lineTo(8f * s, 12f * s)
+                            lineTo(14f * s, 19f * s)
+                        },
+                        color = LightFg,
+                        style = Stroke(1.8f * s, cap = StrokeCap.Round, join = StrokeJoin.Round),
                     )
-                },
-                navigationIcon = {
-                    Box(
-                        modifier = Modifier
-                            .padding(start = 4.dp)
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .clickable(onClick = onNavigateBack),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "\u2190",
-                            fontSize = 22.sp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
+                }
+            }
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text       = "Настройки сессии",
+                fontSize   = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color      = LightFg,
             )
         }
-    ) { paddingValues ->
+
+        Spacer(Modifier.height(20.dp))
+
+        // ── Scrollable body ───────────────────────────
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
         ) {
+
+            // ── РЕЖИМЫ ───────────────────────────────
+            SectionLabel("РЕЖИМЫ")
+            Spacer(Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement   = Arrangement.spacedBy(8.dp),
+            ) {
+                modeNames.forEach { name ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(LightFg)
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
+                    ) {
+                        Text(name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(22.dp))
+
+            // ── КОЛИЧЕСТВО СЛОВ ───────────────────────
+            SectionLabel("КОЛИЧЕСТВО СЛОВ")
+            Spacer(Modifier.height(8.dp))
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp),
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(LightCard),
             ) {
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Summary of selected modes
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                Row(
+                    modifier              = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Row(
+                    // Шаг: 1 если слов ≤20, иначе 5
+                    val step = if (sourceWordCount <= 20L) 1 else 5
+
+                    // Minus — не уходим ниже step (не сбрасываем в "Все")
+                    val minusEnabled = selectedWordCount > step && selectedWordIds.isEmpty()
+                    Text(
+                        text     = "−",
+                        fontSize = 28.sp,
+                        color    = if (minusEnabled) LightFg else LightFgMuted,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable(enabled = minusEnabled) {
+                                selectedWordCount = maxOf(step, selectedWordCount - step)
+                            }
+                            .padding(top = 4.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+
+                    // Count
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text       = when {
+                                selectedWordIds.isNotEmpty() -> "${selectedWordIds.size}"
+                                selectedWordCount == 0       -> "Все"
+                                else                         -> "$selectedWordCount"
+                            },
+                            fontSize   = 42.sp,
+                            fontWeight = FontWeight.Bold,
+                            color      = LightFg,
+                        )
+                        Text(
+                            text     = "из $sourceWordCount доступных",
+                            fontSize = 13.sp,
+                            color    = LightFgSecondary,
+                        )
+                    }
+
+                    // Plus — из "Все" → step; при переполнении → "Все"
+                    val plusEnabled = selectedWordIds.isEmpty() && selectedWordCount < sourceWordCount
+                    Text(
+                        text     = "+",
+                        fontSize = 28.sp,
+                        color    = if (plusEnabled) LightFg else LightFgMuted,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable(enabled = plusEnabled) {
+                                val next = if (selectedWordCount == 0) step
+                                           else selectedWordCount + step
+                                selectedWordCount = if (next >= sourceWordCount) 0 else next
+                            }
+                            .padding(top = 4.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+                // Bottom separator
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(LightFgMuted.copy(alpha = 0.25f)),
+                )
+            }
+
+            Spacer(Modifier.height(22.dp))
+
+            // ── ИСТОЧНИК ─────────────────────────────
+            SectionLabel("ИСТОЧНИК")
+            Spacer(Modifier.height(8.dp))
+            Column {
+                // Main source row — нижние углы квадратные когда раскрыто
+                val sourceHeaderShape = if (isSourceExpanded)
+                    RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
+                else
+                    RoundedCornerShape(14.dp)
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(sourceHeaderShape)
+                        .background(LightCard)
+                        .clickable { isSourceExpanded = !isSourceExpanded }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier         = Modifier
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(LightFgMuted.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center,
+                    ) { BookIcon() }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text     = "$currentSourceLabel  $currentSourceCount",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Normal,
+                        color    = LightFg,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text     = ">",
+                        fontSize = 16.sp,
+                        color    = LightFgSecondary,
+                        modifier = Modifier.scale(scaleX = if (isSourceExpanded) -1f else 1f, scaleY = 1f),
+                    )
+                }
+                // Expandable chips — верхние углы квадратные, нижние скруглённые
+                AnimatedVisibility(
+                    visible = isSourceExpanded,
+                    enter   = expandVertically(expandFrom = androidx.compose.ui.Alignment.Top),
+                    exit    = shrinkVertically(shrinkTowards = androidx.compose.ui.Alignment.Top),
+                ) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .clip(RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp))
+                            .background(LightCard)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            text = "\uD83C\uDFAF",
-                            fontSize = 20.sp,
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(0.5.dp)
+                                .background(LightFgMuted.copy(alpha = 0.3f))
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "Режимы обучения",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
-                            )
-                            Text(
-                                text = modeNames.joinToString(", "),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
-                }
-
-                // --- Word Source Section ---
-                Spacer(modifier = Modifier.height(28.dp))
-
-                Text(
-                    text = "Источник слов",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    SelectableChip(
-                        label = "Все слова ($totalDictionaryCount)",
-                        isSelected = selectedSource == "",
-                        onClick = {
-                            selectedSource = ""
-                            selectedWordIds = emptySet()
-                            isWordPickerExpanded = false
-                        },
-                    )
-
-                    availablePacks.forEach { pack ->
-                        val packCount = packWordCounts[pack.sourceTag] ?: 0
-                        SelectableChip(
-                            label = "${pack.emoji} ${pack.title} ($packCount)",
-                            isSelected = selectedSource == pack.sourceTag,
-                            onClick = {
-                                selectedSource = pack.sourceTag
+                        Spacer(Modifier.height(2.dp))
+                        SourceRow(
+                            label      = "Все слова ($totalDictionaryCount)",
+                            isSelected = selectedSource == "",
+                            onClick    = {
+                                selectedSource = ""
                                 selectedWordIds = emptySet()
-                                isWordPickerExpanded = false
+                                isSourceExpanded = false
                             },
                         )
-                    }
-                }
-
-                // --- Word Count Section ---
-                Spacer(modifier = Modifier.height(28.dp))
-
-                Text(
-                    text = "Количество слов",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Counter row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    // Minus button
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (selectedWordCount > 0 && selectedWordIds.isEmpty())
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        availablePacks.forEach { pack ->
+                            val cnt = packWordCounts[pack.sourceTag] ?: 0
+                            SourceRow(
+                                label      = "${pack.emoji} ${pack.title} ($cnt)",
+                                isSelected = selectedSource == pack.sourceTag,
+                                onClick    = {
+                                    selectedSource = pack.sourceTag
+                                    selectedWordIds = emptySet()
+                                    isSourceExpanded = false
+                                },
                             )
-                            .clickable(enabled = selectedWordCount > 0 && selectedWordIds.isEmpty()) {
-                                val newCount = selectedWordCount - 5
-                                selectedWordCount = if (newCount < 5) 0 else newCount
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "\u2212",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (selectedWordCount > 0 && selectedWordIds.isEmpty())
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(20.dp))
-
-                    // Count display
-                    Text(
-                        text = if (selectedWordIds.isNotEmpty()) "${selectedWordIds.size}"
-                        else if (selectedWordCount == 0) "Все"
-                        else "$selectedWordCount",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-
-                    Spacer(modifier = Modifier.width(20.dp))
-
-                    // Plus button
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (selectedWordIds.isEmpty())
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                            )
-                            .clickable(enabled = selectedWordIds.isEmpty()) {
-                                if (selectedWordCount == 0) {
-                                    selectedWordCount = 5
-                                } else {
-                                    val newCount = selectedWordCount + 5
-                                    if (newCount >= sourceWordCount) {
-                                        selectedWordCount = 0 // back to "All"
-                                    } else {
-                                        selectedWordCount = newCount
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "+",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (selectedWordIds.isEmpty())
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Text(
-                    text = "Доступно: $sourceWordCount",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                )
-
-                // --- Word Selection Section ---
-                Spacer(modifier = Modifier.height(28.dp))
-
-                Text(
-                    text = "Выбор слов",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Toggle button for word picker
-                OutlinedButton(
-                    onClick = {
-                        isWordPickerExpanded = !isWordPickerExpanded
-                        if (!isWordPickerExpanded) {
-                            selectedWordIds = emptySet()
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        if (selectedWordIds.isNotEmpty()) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outlineVariant,
-                    ),
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(22.dp))
+
+            // ── ВЫБОР СЛОВ ───────────────────────────
+            SectionLabel("ВЫБОР СЛОВ")
+            Spacer(Modifier.height(8.dp))
+            Column {
+                val pickerHeaderShape = if (isWordPickerExpanded)
+                    RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
+                else
+                    RoundedCornerShape(14.dp)
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(pickerHeaderShape)
+                        .background(LightCard)
+                        .clickable {
+                            isWordPickerExpanded = !isWordPickerExpanded
+                            if (!isWordPickerExpanded) selectedWordIds = emptySet()
+                        }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Box(
+                        modifier         = Modifier
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(LightFgMuted.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center,
+                    ) { ListIcon() }
+                    Spacer(Modifier.width(12.dp))
                     Text(
-                        text = if (selectedWordIds.isNotEmpty())
+                        text     = if (selectedWordIds.isNotEmpty())
                             "Выбрано: ${selectedWordIds.size} слов"
-                        else if (isWordPickerExpanded)
-                            "Случайные слова"
                         else
                             "Выбрать конкретные слова",
-                        fontWeight = FontWeight.Medium,
+                        fontSize   = 15.sp,
+                        fontWeight = FontWeight.Normal,
+                        color      = LightFg,
+                        modifier   = Modifier.weight(1f),
+                    )
+                    Text(
+                        text     = ">",
+                        fontSize = 16.sp,
+                        color    = LightFgSecondary,
+                        modifier = Modifier.scale(scaleX = if (isWordPickerExpanded) -1f else 1f, scaleY = 1f),
                     )
                 }
-
-                // Word picker list
                 AnimatedVisibility(
                     visible = isWordPickerExpanded,
-                    enter = expandVertically(),
-                    exit = shrinkVertically(),
+                    enter   = expandVertically(expandFrom = androidx.compose.ui.Alignment.Top),
+                    exit    = shrinkVertically(shrinkTowards = androidx.compose.ui.Alignment.Top),
                 ) {
-                    Card(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp)
-                            .heightIn(max = 250.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                            .clip(RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp))
+                            .background(LightCard)
+                            .heightIn(max = 260.dp),
                     ) {
-                        LazyColumn(
-                            modifier = Modifier.padding(vertical = 4.dp),
-                        ) {
-                            items(
-                                items = sourceWords,
-                                key = { it.id },
-                            ) { word ->
+                        LazyColumn(modifier = Modifier.padding(vertical = 4.dp)) {
+                            items(items = sourceWords, key = { it.id }) { word ->
                                 WordPickerItem(
-                                    word = word,
+                                    word       = word,
                                     isSelected = word.id in selectedWordIds,
-                                    onToggle = {
-                                        selectedWordIds = if (word.id in selectedWordIds) {
+                                    onToggle   = {
+                                        selectedWordIds = if (word.id in selectedWordIds)
                                             selectedWordIds - word.id
-                                        } else {
+                                        else
                                             selectedWordIds + word.id
-                                        }
                                     },
                                 )
                             }
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Bottom button
-            Column(
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // ── Bottom ────────────────────────────────────
+        Column(
+            modifier            = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(top = 8.dp, bottom = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text     = "${modeNames.size} ${modeText(modeNames.size)} · $effectiveCount слов",
+                fontSize = 14.sp,
+                color    = LightFgSecondary,
+            )
+            Spacer(Modifier.height(12.dp))
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 24.dp, top = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = "Слов в сессии: $effectiveCount",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Button(
-                    onClick = {
-                        val idsString = if (selectedWordIds.isNotEmpty()) {
-                            selectedWordIds.joinToString(",")
-                        } else ""
+                    .height(54.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (effectiveCount > 0) LightFg else LightFgMuted.copy(alpha = 0.4f))
+                    .clickable(enabled = effectiveCount > 0) {
+                        val idsString = if (selectedWordIds.isNotEmpty())
+                            selectedWordIds.joinToString(",") else ""
                         onStartStudy(selectedWordCount, selectedSource, idsString)
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    enabled = effectiveCount > 0,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                    ),
-                ) {
-                    Text(
-                        text = "Начать обучение ($effectiveCount)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text       = "Начать обучение",
+                    fontSize   = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color      = Color.White,
+                )
             }
         }
     }
 }
 
-@Composable
-private fun WordPickerItem(
-    word: Word,
-    isSelected: Boolean,
-    onToggle: () -> Unit,
-) {
-    val bgColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-        else Color.Transparent,
-        animationSpec = tween(200),
-    )
+private fun modeText(count: Int) = when {
+    count % 10 == 1 && count % 100 != 11 -> "режим"
+    count % 10 in 2..4 && count % 100 !in 12..14 -> "режима"
+    else -> "режимов"
+}
 
+// ─────────────────────────────────────────────
+//  Small components
+// ─────────────────────────────────────────────
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text          = text,
+        fontSize      = 11.sp,
+        fontWeight    = FontWeight.SemiBold,
+        color         = LightFgSecondary,
+        letterSpacing = 0.8.sp,
+    )
+}
+
+@Composable
+private fun SourceRow(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isSelected) LightFg else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text     = label,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color    = if (isSelected) Color.White else LightFg,
+            modifier = Modifier.weight(1f),
+        )
+        if (isSelected) {
+            Text("✓", fontSize = 14.sp, color = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun WordPickerItem(word: Word, isSelected: Boolean, onToggle: () -> Unit) {
+    val checkScale by animateFloatAsState(
+        targetValue   = if (isSelected) 1f else 0f,
+        animationSpec = tween(150),
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onToggle)
-            .background(bgColor)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Checkbox circle
-        val checkBg by animateColorAsState(
-            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-            animationSpec = tween(200),
-        )
-        val checkBorder by animateColorAsState(
-            targetValue = if (isSelected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-            animationSpec = tween(200),
-        )
-        val checkScale by animateFloatAsState(
-            targetValue = if (isSelected) 1f else 0f,
-            animationSpec = tween(150),
-        )
-
         Box(
             modifier = Modifier
-                .size(24.dp)
-                .background(color = checkBg, shape = CircleShape)
-                .border(width = 1.5.dp, color = checkBorder, shape = CircleShape),
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(if (isSelected) LightProgressBar else Color.Transparent)
+                .border(1.5.dp, if (isSelected) LightProgressBar else LightFgMuted, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "\u2713",
-                fontSize = 14.sp,
+                text     = "✓",
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimary,
+                color    = Color.White,
                 modifier = Modifier.scale(checkScale),
             )
         }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = word.original,
-                style = MaterialTheme.typography.bodyMedium,
+                text     = word.original,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color    = LightFg,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = word.translation,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                text     = word.translation,
+                fontSize = 13.sp,
+                color    = LightFgSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -538,43 +596,44 @@ private fun WordPickerItem(
     }
 }
 
+// ─────────────────────────────────────────────
+//  Icon composables
+// ─────────────────────────────────────────────
 @Composable
-private fun SelectableChip(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val primary = MaterialTheme.colorScheme.primary
-    val onPrimary = MaterialTheme.colorScheme.onPrimary
-    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
-    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
-
-    val animatedBgColor by animateColorAsState(
-        targetValue = if (isSelected) primary else surfaceVariant.copy(alpha = 0.5f),
-        animationSpec = tween(250),
-    )
-    val animatedTextColor by animateColorAsState(
-        targetValue = if (isSelected) onPrimary else onSurfaceVariant,
-        animationSpec = tween(250),
-    )
-
-    Box(
-        modifier = modifier
-            .height(40.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(color = animatedBgColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Medium,
-            color = animatedTextColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+private fun BookIcon() {
+    val c = LightFgSecondary
+    Canvas(Modifier.size(18.dp)) {
+        val s  = size.width / 20f
+        val sw = Stroke(1.5f)
+        val sw2 = Stroke(1.2f, cap = StrokeCap.Round)
+        svgPath20(SettingsIconPaths.BOOK_COVER, s) { drawPath(it, c, style = sw) }
+        svgPath20(SettingsIconPaths.BOOK_SPINE, s) { drawPath(it, c, style = sw) }
+        svgPath20(SettingsIconPaths.BOOK_L1,    s) { drawPath(it, c, style = sw2) }
+        svgPath20(SettingsIconPaths.BOOK_L2,    s) { drawPath(it, c, style = sw2) }
     }
+}
+
+@Composable
+private fun ListIcon() {
+    val c = LightFgSecondary
+    Canvas(Modifier.size(18.dp)) {
+        val s  = size.width / 20f
+        val sw = Stroke(1.5f, cap = StrokeCap.Round)
+        val sw2 = Stroke(1.2f, cap = StrokeCap.Round)
+        listOf(
+            SettingsIconPaths.LIST_L1, SettingsIconPaths.LIST_L2, SettingsIconPaths.LIST_L3,
+            SettingsIconPaths.LIST_C1A, SettingsIconPaths.LIST_C1B,
+            SettingsIconPaths.LIST_C2A, SettingsIconPaths.LIST_C2B,
+        ).forEach { d -> svgPath20(d, s) { drawPath(it, c, style = sw) } }
+        svgPath20(SettingsIconPaths.LIST_CIRC, s) { drawPath(it, c, style = sw2) }
+    }
+}
+
+private inline fun DrawScope.svgPath20(
+    pathData: String,
+    s: Float,
+    crossinline draw: DrawScope.(androidx.compose.ui.graphics.Path) -> Unit,
+) {
+    val path = PathParser().parsePathString(pathData).toPath()
+    scale(s, s, pivot = Offset.Zero) { draw(path) }
 }
