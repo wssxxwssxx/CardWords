@@ -146,9 +146,35 @@ class WordSelectionViewModel : ViewModel() {
 
     fun addSelectedWords() {
         val selected = _uiState.value.selectedWordIds
-        if (selected.isNotEmpty()) {
-            selected.forEach { id ->
-                repository.addToDictionary(id)
+        if (selected.isEmpty()) return
+
+        // Snapshot the actual words before we mutate the dictionary
+        val wordsToSync = selected
+            .mapNotNull { id -> repository.getWordById(id) }
+
+        // Local insertion (immediate)
+        selected.forEach { id -> repository.addToDictionary(id) }
+
+        // Reset selection + refresh UI so newly added words show as "added"
+        // and checkboxes clear, matching the behaviour of `addApiWord` /
+        // `addCustomWord`.
+        _uiState.update { it.copy(selectedWordIds = emptySet()) }
+        loadWords()
+
+        // Server sync — runs on app-level scope so navigation away can't kill it
+        val token = authManager.getToken()
+        if (token != null && wordsToSync.isNotEmpty()) {
+            AppModule.syncScope.launch {
+                val existing = apiClient.getCards(token).getOrNull()
+                    ?.map { it.wordOriginal.lowercase().trim() }
+                    ?.toSet()
+                    ?: emptySet()
+                wordsToSync.forEach { word ->
+                    val key = word.original.lowercase().trim()
+                    if (key !in existing) {
+                        apiClient.createCard(token, word.original, word.translation)
+                    }
+                }
             }
         }
     }
@@ -188,11 +214,15 @@ class WordSelectionViewModel : ViewModel() {
         }
         repository.addToDictionary(wordId)
 
-        // Also send to server if logged in
+        // Also send to server if logged in — use app-level scope so a quick
+        // screen close doesn't cancel the upload before it reaches the server.
         val token = authManager.getToken()
         if (token != null) {
-            viewModelScope.launch {
-                apiClient.createCard(token, word.original, word.translation)
+            AppModule.syncScope.launch {
+                val checkResult = apiClient.checkWord(token, word.original).getOrNull()
+                if (checkResult?.exists != true) {
+                    apiClient.createCard(token, word.original, word.translation)
+                }
             }
         }
 
