@@ -214,6 +214,20 @@ class WordSelectionViewModel : ViewModel() {
         }
         repository.addToDictionary(wordId)
 
+        // Reset form state + refresh the list immediately so the UI reflects
+        // the new word. This must happen BEFORE we fire the server-sync
+        // coroutine — same ordering as `addSelectedWords` and
+        // `PackDetailViewModel.addSingleWord`.
+        _uiState.update {
+            it.copy(
+                customOriginal = "",
+                customTranslation = "",
+                customTranscription = "",
+                customWordAdded = true,
+            )
+        }
+        loadWords()
+
         // Also send to server if logged in — use app-level scope so a quick
         // screen close doesn't cancel the upload before it reaches the server.
         val token = authManager.getToken()
@@ -225,16 +239,6 @@ class WordSelectionViewModel : ViewModel() {
                 }
             }
         }
-
-        _uiState.update {
-            it.copy(
-                customOriginal = "",
-                customTranslation = "",
-                customTranscription = "",
-                customWordAdded = true,
-            )
-        }
-        loadWords()
     }
 
     private fun filterWords(words: List<Word>, query: String): List<Word> {
