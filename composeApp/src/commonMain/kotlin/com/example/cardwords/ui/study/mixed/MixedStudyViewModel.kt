@@ -188,10 +188,12 @@ class MixedStudyViewModel(
 
         // 1. Update word progress for each (word, mode) pair
         val uniqueWords = mutableSetOf<Long>()
+        val practicedModes = mutableMapOf<Long, MutableSet<StudyMode>>()
         answerResults.forEach { (key, result) ->
             val (wordId, mode) = key
             val (sessionCorrect, sessionTotal) = result
             uniqueWords.add(wordId)
+            practicedModes.getOrPut(wordId) { mutableSetOf() }.add(mode)
 
             val existing = repository.getWordProgress(wordId, mode)
             val newCorrect = (existing?.correctCount ?: 0) + sessionCorrect
@@ -210,6 +212,34 @@ class MixedStudyViewModel(
                     nextReviewAt = nextReview,
                 )
             )
+        }
+
+        // 1b. For each word the user practised, refresh other modes that were
+        // overdue ("Повторить") — bump their nextReviewAt forward. Otherwise the
+        // word stays in "Повторить" forever just because a different mode is
+        // still overdue.
+        //
+        // IMPORTANT: MasteryLevels.intervalFor(0) returns 0L. If we used the raw
+        // interval for a level-0 mode, `nextReviewAt = now + 0 = now`, and the
+        // mode would still satisfy `in 1..now` immediately — defeating the
+        // whole point of this block. Floor the bump at the level-1 interval
+        // (≈ 4h) so even fresh modes get pushed past "now".
+        val minBumpInterval = MasteryLevels.intervalFor(1)
+        practicedModes.forEach { (wordId, modesPractisedThisSession) ->
+            val allProgress = repository.getAllProgressForWord(wordId)
+            allProgress.forEach { wp ->
+                if (wp.mode in modesPractisedThisSession) return@forEach
+                if (wp.nextReviewAt in 1..now) {
+                    val bump = MasteryLevels.intervalFor(wp.masteryLevel)
+                        .coerceAtLeast(minBumpInterval)
+                    repository.upsertWordProgress(
+                        wp.copy(
+                            lastStudiedAt = now,
+                            nextReviewAt = now + bump,
+                        )
+                    )
+                }
+            }
         }
 
         // 2. Save study session
