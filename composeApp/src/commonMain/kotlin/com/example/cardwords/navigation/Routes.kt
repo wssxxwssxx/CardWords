@@ -77,6 +77,12 @@ data object StatsTabRoute
 data object ProfileTabRoute
 
 @Serializable
+data object MyTeachersTabRoute
+
+@Serializable
+data object TeachingTabRoute
+
+@Serializable
 data object RoleSelectionRoute
 
 @Serializable

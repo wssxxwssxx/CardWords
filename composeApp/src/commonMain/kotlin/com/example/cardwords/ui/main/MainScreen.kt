@@ -17,6 +17,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,19 +31,24 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.cardwords.data.model.UserRole
+import com.example.cardwords.di.AppModule
 import com.example.cardwords.navigation.AchievementsRoute
 import com.example.cardwords.navigation.HomeRoute
 import com.example.cardwords.navigation.MixedStudyRoute
+import com.example.cardwords.navigation.MyTeachersTabRoute
 import com.example.cardwords.navigation.ProfileTabRoute
 import com.example.cardwords.navigation.StatsTabRoute
 import com.example.cardwords.navigation.StudyModeSelectionRoute
 import com.example.cardwords.navigation.DungeonRoute
+import com.example.cardwords.navigation.TeachingTabRoute
 import com.example.cardwords.navigation.WordFallRoute
 import com.example.cardwords.navigation.WordPacksRoute
 import com.example.cardwords.navigation.WordSelectionRoute
@@ -147,11 +153,20 @@ private data class TabItem(
     val icon: @Composable (Modifier, Color) -> Unit,
 )
 
-private val tabs = listOf(
-    TabItem("Главная",    HomeRoute,       { m, c -> HomeNavIcon(m, c) }),
-    TabItem("Слова",      WordsTabRoute,   { m, c -> BookNavIcon(m, c) }),
-    TabItem("Статистика", StatsTabRoute,   { m, c -> BarChartNavIcon(m, c) }),
-    TabItem("Профиль",    ProfileTabRoute, { m, c -> PersonNavIcon(m, c) }),
+private val studentTabs = listOf(
+    TabItem("Главная",    HomeRoute,          { m, c -> HomeNavIcon(m, c) }),
+    TabItem("Слова",      WordsTabRoute,      { m, c -> BookNavIcon(m, c) }),
+    TabItem("Статистика", StatsTabRoute,      { m, c -> BarChartNavIcon(m, c) }),
+    TabItem("Учителя",    MyTeachersTabRoute, { m, c -> PersonNavIcon(m, c) }),
+    TabItem("Профиль",    ProfileTabRoute,    { m, c -> PersonNavIcon(m, c) }),
+)
+
+private val teacherTabs = listOf(
+    TabItem("Главная",      HomeRoute,        { m, c -> HomeNavIcon(m, c) }),
+    TabItem("Слова",        WordsTabRoute,    { m, c -> BookNavIcon(m, c) }),
+    TabItem("Статистика",   StatsTabRoute,    { m, c -> BarChartNavIcon(m, c) }),
+    TabItem("Преподавание", TeachingTabRoute, { m, c -> PersonNavIcon(m, c) }),
+    TabItem("Профиль",      ProfileTabRoute,  { m, c -> PersonNavIcon(m, c) }),
 )
 
 // ─────────────────────────────────────────────
@@ -162,129 +177,143 @@ fun MainScreen(
     outerNavController: NavHostController,
     onLogout: () -> Unit = {},
 ) {
-    val tabNavController = rememberNavController()
-    val navBackStackEntry by tabNavController.currentBackStackEntryAsState()
+    val authManager = AppModule.authManager
+    val role by authManager.roleFlow.collectAsStateWithLifecycle()
+    val tabs = remember(role) {
+        when (role) {
+            UserRole.STUDENT -> studentTabs
+            UserRole.TEACHER -> teacherTabs
+            null             -> emptyList()
+        }
+    }
 
-    Scaffold(
-        containerColor = LightBg,
-        bottomBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(LightCard)
-                    .navigationBarsPadding(),
-            ) {
-                // Top divider
-                Box(
+    key(role) {
+        val tabNavController = rememberNavController()
+        val navBackStackEntry by tabNavController.currentBackStackEntryAsState()
+
+        Scaffold(
+            containerColor = LightBg,
+            bottomBar = {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(0.5.dp)
-                        .background(LightFgMuted.copy(alpha = 0.3f)),
-                )
-                Row(
-                    modifier              = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    horizontalArrangement = Arrangement.SpaceAround,
+                        .background(LightCard)
+                        .navigationBarsPadding(),
                 ) {
-                    tabs.forEach { tab ->
-                        val selected = navBackStackEntry?.destination
-                            ?.hasRoute(tab.route::class) == true
-                        val iconColor = if (selected) LightFg else LightFgSecondary
+                    // Top divider
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(LightFgMuted.copy(alpha = 0.3f)),
+                    )
+                    Row(
+                        modifier              = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                    ) {
+                        tabs.forEach { tab ->
+                            val selected = navBackStackEntry?.destination
+                                ?.hasRoute(tab.route::class) == true
+                            val iconColor = if (selected) LightFg else LightFgSecondary
 
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxSize()
-                                .clickable {
-                                    tabNavController.navigate(tab.route) {
-                                        popUpTo(tabNavController.graph.startDestinationId) {
-                                            saveState = true
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxSize()
+                                    .clickable {
+                                        tabNavController.navigate(tab.route) {
+                                            popUpTo(tabNavController.graph.startDestinationId) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState    = true
                                         }
-                                        launchSingleTop = true
-                                        restoreState    = true
                                     }
-                                }
-                                .padding(top = 8.dp),
-                            horizontalAlignment   = Alignment.CenterHorizontally,
-                            verticalArrangement   = Arrangement.spacedBy(3.dp),
-                        ) {
-                            tab.icon(Modifier.size(22.dp), iconColor)
-                            Text(
-                                text       = tab.label,
-                                fontSize   = 10.sp,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                color      = iconColor,
-                            )
+                                    .padding(top = 8.dp),
+                                horizontalAlignment   = Alignment.CenterHorizontally,
+                                verticalArrangement   = Arrangement.spacedBy(3.dp),
+                            ) {
+                                tab.icon(Modifier.size(22.dp), iconColor)
+                                Text(
+                                    text       = tab.label,
+                                    fontSize   = 10.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                    color      = iconColor,
+                                )
+                            }
                         }
                     }
                 }
-            }
-        },
-    ) { paddingValues ->
-        NavHost(
-            navController    = tabNavController,
-            startDestination = HomeRoute,
-            modifier         = Modifier.padding(paddingValues),
-        ) {
-            composable<HomeRoute> {
-                HomeScreen(
-                    onNavigateToStudy = {
-                        outerNavController.navigate(StudyModeSelectionRoute)
-                    },
-                    onNavigateToSmartSession = {
-                        outerNavController.navigate(
-                            MixedStudyRoute(
-                                multipleChoice = true,
-                                flashcard      = true,
-                                typing         = true,
-                                letterAssembly = true,
-                                isSmartSession = true,
+            },
+        ) { paddingValues ->
+            NavHost(
+                navController    = tabNavController,
+                startDestination = HomeRoute,
+                modifier         = Modifier.padding(paddingValues),
+            ) {
+                composable<HomeRoute> {
+                    HomeScreen(
+                        onNavigateToStudy = {
+                            outerNavController.navigate(StudyModeSelectionRoute)
+                        },
+                        onNavigateToSmartSession = {
+                            outerNavController.navigate(
+                                MixedStudyRoute(
+                                    multipleChoice = true,
+                                    flashcard      = true,
+                                    typing         = true,
+                                    letterAssembly = true,
+                                    isSmartSession = true,
+                                )
                             )
-                        )
-                    },
-                    onNavigateToWordFall = {
-                        outerNavController.navigate(WordFallRoute)
-                    },
-                    onNavigateToDungeon = {
-                        outerNavController.navigate(DungeonRoute)
-                    },
-                    onNavigateToTest = {
-                        val authManager = com.example.cardwords.di.AppModule.authManager
-                        if (authManager.isLoggedIn()) {
-                            outerNavController.navigate(com.example.cardwords.navigation.TestRoute)
-                        } else {
-                            outerNavController.navigate(com.example.cardwords.navigation.AuthRoute)
-                        }
-                    },
-                )
-            }
+                        },
+                        onNavigateToWordFall = {
+                            outerNavController.navigate(WordFallRoute)
+                        },
+                        onNavigateToDungeon = {
+                            outerNavController.navigate(DungeonRoute)
+                        },
+                        onNavigateToTest = {
+                            if (authManager.isLoggedIn()) {
+                                outerNavController.navigate(com.example.cardwords.navigation.TestRoute)
+                            } else {
+                                outerNavController.navigate(com.example.cardwords.navigation.AuthRoute)
+                            }
+                        },
+                    )
+                }
 
-            composable<WordsTabRoute> {
-                DictionaryScreen(
-                    onNavigateToAddWords  = { outerNavController.navigate(WordPacksRoute) },
-                    onNavigateBack        = {
-                        tabNavController.navigate(HomeRoute) {
-                            popUpTo(tabNavController.graph.startDestinationId) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                    onNavigateToWordSearch = { outerNavController.navigate(WordSelectionRoute) },
-                    showTopBar            = false,
-                )
-            }
+                composable<WordsTabRoute> {
+                    DictionaryScreen(
+                        onNavigateToAddWords  = { outerNavController.navigate(WordPacksRoute) },
+                        onNavigateBack        = {
+                            tabNavController.navigate(HomeRoute) {
+                                popUpTo(tabNavController.graph.startDestinationId) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        onNavigateToWordSearch = { outerNavController.navigate(WordSelectionRoute) },
+                        showTopBar            = false,
+                    )
+                }
 
-            composable<StatsTabRoute> {
-                StatsScreen(
-                    onNavigateBack          = {},
-                    onNavigateToAchievements = { outerNavController.navigate(AchievementsRoute) },
-                    showTopBar              = false,
-                )
-            }
+                composable<StatsTabRoute> {
+                    StatsScreen(
+                        onNavigateBack          = {},
+                        onNavigateToAchievements = { outerNavController.navigate(AchievementsRoute) },
+                        showTopBar              = false,
+                    )
+                }
 
-            composable<ProfileTabRoute> {
-                ProfileScreen(onLogout = onLogout)
+                composable<MyTeachersTabRoute> { /* TODO Task 13 */ Box(Modifier.fillMaxSize()) }
+                composable<TeachingTabRoute>   { /* TODO Task 16 */ Box(Modifier.fillMaxSize()) }
+
+                composable<ProfileTabRoute> {
+                    ProfileScreen(onLogout = onLogout)
+                }
             }
         }
     }
