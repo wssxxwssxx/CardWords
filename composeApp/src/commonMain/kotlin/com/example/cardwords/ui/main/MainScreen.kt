@@ -41,6 +41,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.cardwords.data.model.UserRole
 import com.example.cardwords.di.AppModule
 import com.example.cardwords.navigation.AchievementsRoute
+import com.example.cardwords.navigation.CollectionDetailRoute
 import com.example.cardwords.navigation.HomeRoute
 import com.example.cardwords.navigation.MixedStudyRoute
 import com.example.cardwords.navigation.MyTeachersTabRoute
@@ -58,6 +59,7 @@ import com.example.cardwords.ui.home.HomeScreen
 import com.example.cardwords.ui.profile.ProfileScreen
 import com.example.cardwords.ui.stats.StatsScreen
 import com.example.cardwords.ui.student.MyTeachersScreen
+import com.example.cardwords.ui.teaching.TeachingScreen
 import com.example.cardwords.ui.theme.LightBg
 import com.example.cardwords.ui.theme.LightCard
 import com.example.cardwords.ui.theme.LightFg
@@ -312,7 +314,11 @@ fun MainScreen(
                 composable<MyTeachersTabRoute> {
                     MyTeachersScreen()
                 }
-                composable<TeachingTabRoute>   { /* TODO Task 16 */ Box(Modifier.fillMaxSize()) }
+                composable<TeachingTabRoute> {
+                    TeachingScreen(onOpenCollection = { id ->
+                        outerNavController.navigate(CollectionDetailRoute(id))
+                    })
+                }
 
                 composable<ProfileTabRoute> {
                     ProfileScreen(onLogout = onLogout)
