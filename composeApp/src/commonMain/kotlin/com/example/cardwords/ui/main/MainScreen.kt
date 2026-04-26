@@ -57,6 +57,7 @@ import com.example.cardwords.ui.dictionary.DictionaryScreen
 import com.example.cardwords.ui.home.HomeScreen
 import com.example.cardwords.ui.profile.ProfileScreen
 import com.example.cardwords.ui.stats.StatsScreen
+import com.example.cardwords.ui.student.MyTeachersScreen
 import com.example.cardwords.ui.theme.LightBg
 import com.example.cardwords.ui.theme.LightCard
 import com.example.cardwords.ui.theme.LightFg
@@ -308,7 +309,9 @@ fun MainScreen(
                     )
                 }
 
-                composable<MyTeachersTabRoute> { /* TODO Task 13 */ Box(Modifier.fillMaxSize()) }
+                composable<MyTeachersTabRoute> {
+                    MyTeachersScreen()
+                }
                 composable<TeachingTabRoute>   { /* TODO Task 16 */ Box(Modifier.fillMaxSize()) }
 
                 composable<ProfileTabRoute> {
