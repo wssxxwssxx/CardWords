@@ -166,6 +166,65 @@ class CardWordsApiClient(
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // Teacher — collections
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun listMyCollections(token: String): Result<List<CollectionDto>> = runCatching {
+        val response = client.get("$baseUrl/api/teacher/collections") {
+            header("Authorization", bearerHeader(token))
+        }
+        if (response.status.value !in 200..299) {
+            error("HTTP ${response.status.value}")
+        }
+        response.body<List<CollectionDto>>()
+    }
+
+    suspend fun getCollection(token: String, id: String): Result<CollectionDetailDto> = runCatching {
+        val response = client.get("$baseUrl/api/teacher/collections/$id") {
+            header("Authorization", bearerHeader(token))
+        }
+        if (response.status.value !in 200..299) {
+            error("HTTP ${response.status.value}")
+        }
+        response.body<CollectionDetailDto>()
+    }
+
+    suspend fun createCollection(token: String, name: String, description: String): Result<CollectionDto> = runCatching {
+        val response = client.post("$baseUrl/api/teacher/collections") {
+            header("Authorization", bearerHeader(token))
+            contentType(ContentType.Application.Json)
+            setBody(CreateCollectionRequest(name, description))
+        }
+        if (response.status.value !in 200..299) {
+            error("HTTP ${response.status.value}")
+        }
+        response.body<CollectionDto>()
+    }
+
+    suspend fun updateCollection(
+        token: String, id: String, name: String, description: String,
+    ): Result<CollectionDto> = runCatching {
+        val response = client.put("$baseUrl/api/teacher/collections/$id") {
+            header("Authorization", bearerHeader(token))
+            contentType(ContentType.Application.Json)
+            setBody(UpdateCollectionRequest(name, description))
+        }
+        if (response.status.value !in 200..299) {
+            error("HTTP ${response.status.value}")
+        }
+        response.body<CollectionDto>()
+    }
+
+    suspend fun deleteCollection(token: String, id: String): Result<Unit> = runCatching {
+        val response = client.delete("$baseUrl/api/teacher/collections/$id") {
+            header("Authorization", bearerHeader(token))
+        }
+        if (response.status.value !in 200..299 && response.status.value != 404) {
+            error("HTTP ${response.status.value}")
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // Tests
     // ═══════════════════════════════════════════════════════════════
 
