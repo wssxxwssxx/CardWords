@@ -20,7 +20,7 @@ object AppModule {
 
     val cardWordsApiClient: CardWordsApiClient by lazy { CardWordsApiClient() }
 
-    val authManager: AuthManager by lazy { AuthManager(databaseRepository) }
+    val authManager: AuthManager by lazy { AuthManager(databaseRepository, cardWordsApiClient) }
 
     /**
      * Application-lifetime scope for fire-and-forget server sync operations

@@ -2,6 +2,7 @@ package com.example.cardwords.ui.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cardwords.data.model.UserRole
 import com.example.cardwords.data.model.Word
 import com.example.cardwords.di.AppModule
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,6 +99,7 @@ class AuthViewModel : ViewModel() {
                         email = response.user.email,
                         name = response.user.name,
                         subscription = response.user.subscriptionStatus,
+                        role = UserRole.fromWire(response.user.role),
                     )
                     syncCardsFromServer(response.accessToken)
                     _uiState.update { it.copy(phase = AuthPhase.SUCCESS) }
@@ -139,6 +141,7 @@ class AuthViewModel : ViewModel() {
                                 email = response.user.email,
                                 name = response.user.name,
                                 subscription = response.user.subscriptionStatus,
+                                role = UserRole.fromWire(response.user.role),
                             )
                             syncCardsFromServer(response.accessToken)
                             _uiState.update { it.copy(phase = AuthPhase.SUCCESS) }
