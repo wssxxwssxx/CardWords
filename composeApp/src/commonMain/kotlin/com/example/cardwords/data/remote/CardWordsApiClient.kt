@@ -225,6 +225,82 @@ class CardWordsApiClient(
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // Teacher — cards inside collection + assignment
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun addCardToCollection(
+        token: String, cid: String, original: String, translation: String?,
+    ): Result<CollectionCardDto> = runCatching {
+        val response = client.post("$baseUrl/api/teacher/collections/$cid/cards") {
+            header("Authorization", bearerHeader(token))
+            contentType(ContentType.Application.Json)
+            setBody(AddCollectionCardRequest(original, translation))
+        }
+        // Treat 409 (already in collection) as success — returns existing card body in idempotent backends.
+        if (response.status.value !in 200..299 && response.status.value != 409) {
+            error("HTTP ${response.status.value}")
+        }
+        response.body<CollectionCardDto>()
+    }
+
+    suspend fun removeCardFromCollection(
+        token: String, cid: String, cardId: String,
+    ): Result<Unit> = runCatching {
+        val response = client.delete("$baseUrl/api/teacher/collections/$cid/cards/$cardId") {
+            header("Authorization", bearerHeader(token))
+        }
+        if (response.status.value !in 200..299 && response.status.value != 404) {
+            error("HTTP ${response.status.value}")
+        }
+    }
+
+    suspend fun assignCollection(
+        token: String, cid: String, studentId: String,
+    ): Result<Unit> = runCatching {
+        val response = client.post("$baseUrl/api/teacher/collections/$cid/assign/$studentId") {
+            header("Authorization", bearerHeader(token))
+        }
+        // 409 = already assigned; treat as success (idempotent assign).
+        if (response.status.value !in 200..299 && response.status.value != 409) {
+            error("HTTP ${response.status.value}")
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Student
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun listMyTeachers(token: String): Result<List<TeacherSummaryDto>> = runCatching {
+        val response = client.get("$baseUrl/api/student/teachers") {
+            header("Authorization", bearerHeader(token))
+        }
+        if (response.status.value !in 200..299) {
+            error("HTTP ${response.status.value}")
+        }
+        response.body<List<TeacherSummaryDto>>()
+    }
+
+    suspend fun listAssignedCollections(token: String): Result<List<AssignedCollectionDto>> = runCatching {
+        val response = client.get("$baseUrl/api/student/collections") {
+            header("Authorization", bearerHeader(token))
+        }
+        if (response.status.value !in 200..299) {
+            error("HTTP ${response.status.value}")
+        }
+        response.body<List<AssignedCollectionDto>>()
+    }
+
+    suspend fun acceptCollection(token: String, cid: String): Result<Unit> = runCatching {
+        val response = client.post("$baseUrl/api/student/collections/$cid/add") {
+            header("Authorization", bearerHeader(token))
+        }
+        // Idempotent: if collection already added on server, expect 200 or 409 — both OK for client.
+        if (response.status.value !in 200..299 && response.status.value != 409) {
+            error("HTTP ${response.status.value}")
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // Tests
     // ═══════════════════════════════════════════════════════════════
 
