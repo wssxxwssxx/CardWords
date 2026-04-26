@@ -10,6 +10,7 @@ import androidx.navigation.toRoute
 import com.example.cardwords.data.model.OnboardingManager
 import com.example.cardwords.di.AppModule
 import com.example.cardwords.navigation.AchievementsRoute
+import com.example.cardwords.navigation.CollectionDetailRoute
 import com.example.cardwords.navigation.MainRoute
 import com.example.cardwords.navigation.MixedStudyRoute
 import com.example.cardwords.navigation.OnboardingRoute
@@ -40,6 +41,7 @@ import com.example.cardwords.ui.auth.AuthTab
 import com.example.cardwords.ui.auth.RoleSelectionScreen
 import com.example.cardwords.ui.game.dungeon.DungeonScreen
 import com.example.cardwords.ui.game.wordfall.WordFallScreen
+import com.example.cardwords.ui.teaching.CollectionDetailScreen
 import com.example.cardwords.ui.test.TestScreen
 import com.example.cardwords.ui.theme.CardWordsTheme
 
@@ -263,6 +265,14 @@ fun App() {
                     onNavigateBack = {
                         navController.popBackStack()
                     },
+                )
+            }
+
+            composable<CollectionDetailRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<CollectionDetailRoute>()
+                CollectionDetailScreen(
+                    collectionId = route.collectionId,
+                    onNavigateBack = { navController.popBackStack() },
                 )
             }
         }
