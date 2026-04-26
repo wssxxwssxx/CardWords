@@ -42,12 +42,16 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cardwords.data.model.UserRole
 import com.example.cardwords.ui.components.PullRefresh
+import com.example.cardwords.ui.components.cardBg
 import com.example.cardwords.ui.theme.LightBg
 import com.example.cardwords.ui.theme.LightCard
 import com.example.cardwords.ui.theme.LightFg
 import com.example.cardwords.ui.theme.LightFgMuted
 import com.example.cardwords.ui.theme.LightFgSecondary
+
+private val DividerColor = Color(0xFFE5E5EA)
 
 // ─────────────────────────────────────────────
 //  Avatar data
@@ -66,6 +70,7 @@ fun ProfileScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     var showAvatarPicker by remember { mutableStateOf(false) }
+    var showRoleDialog by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -84,6 +89,17 @@ fun ProfileScreen(
                 showAvatarPicker = false
             },
             onDismiss = { showAvatarPicker = false },
+        )
+    }
+
+    if (showRoleDialog) {
+        RolePickDialog(
+            current = state.currentRole,
+            onPick = {
+                viewModel.switchRole(it)
+                showRoleDialog = false
+            },
+            onDismiss = { showRoleDialog = false },
         )
     }
 
@@ -159,6 +175,36 @@ fun ProfileScreen(
 
         // About card
         AboutCard()
+
+        Spacer(Modifier.height(10.dp))
+
+        // Switch-role action row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .cardBg(LightCard, DividerColor, 0.5.dp, 14.dp)
+                .clickable(enabled = !state.roleSwitchInFlight) { showRoleDialog = true }
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Сменить роль",
+                    fontSize = 15.sp,
+                    color = LightFg,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = when (state.currentRole) {
+                        UserRole.STUDENT -> "Сейчас: ученик"
+                        UserRole.TEACHER -> "Сейчас: преподаватель"
+                        null             -> "Не задана"
+                    },
+                    fontSize = 12.sp,
+                    color = LightFgSecondary,
+                )
+            }
+        }
 
         Spacer(Modifier.height(10.dp))
 
@@ -351,6 +397,61 @@ private fun AvatarPickerDialog(
                         fontSize = 15.sp,
                         color    = LightFgSecondary,
                     )
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
+//  Role picker dialog
+// ─────────────────────────────────────────────
+@Composable
+private fun RolePickDialog(
+    current: UserRole?,
+    onPick: (UserRole) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .cardBg(LightCard, DividerColor, 0.5.dp, 18.dp)
+                .padding(20.dp),
+        ) {
+            Text(
+                text       = "Выберите роль",
+                fontSize   = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color      = LightFg,
+            )
+            Spacer(Modifier.height(12.dp))
+            UserRole.values().forEach { role ->
+                val label = when (role) {
+                    UserRole.STUDENT -> "Я — ученик"
+                    UserRole.TEACHER -> "Я — преподаватель"
+                }
+                val isCurrent = role == current
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !isCurrent) { onPick(role) }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = label,
+                        fontSize = 15.sp,
+                        color = if (isCurrent) LightFgSecondary else LightFg,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    if (isCurrent) {
+                        Text(
+                            text = "текущая",
+                            fontSize = 11.sp,
+                            color = LightFgSecondary,
+                        )
+                    }
                 }
             }
         }

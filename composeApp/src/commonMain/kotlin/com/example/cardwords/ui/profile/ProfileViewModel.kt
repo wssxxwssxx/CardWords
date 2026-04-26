@@ -1,13 +1,17 @@
 package com.example.cardwords.ui.profile
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.cardwords.data.model.MasteryLevels
 import com.example.cardwords.data.model.StreakManager
+import com.example.cardwords.data.model.UserRole
 import com.example.cardwords.data.model.XpManager
 import com.example.cardwords.di.AppModule
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 data class ProfileUiState(
     val totalWords: Long = 0,
@@ -22,6 +26,8 @@ data class ProfileUiState(
     val userName: String? = null,
     val userEmail: String? = null,
     val selectedAvatarId: Int = -1,   // -1 = no avatar chosen (gray placeholder)
+    val currentRole: UserRole? = null,
+    val roleSwitchInFlight: Boolean = false,
 )
 
 class ProfileViewModel : ViewModel() {
@@ -66,7 +72,23 @@ class ProfileViewModel : ViewModel() {
             userName = authManager.getUserName(),
             userEmail = authManager.getUserEmail(),
             selectedAvatarId = avatarId,
+            currentRole = authManager.getRole(),
+            roleSwitchInFlight = _uiState.value.roleSwitchInFlight,
         )
+    }
+
+    fun switchRole(newRole: UserRole) {
+        if (_uiState.value.roleSwitchInFlight) return
+        _uiState.update { it.copy(roleSwitchInFlight = true) }
+        viewModelScope.launch {
+            AppModule.authManager.setRole(newRole)
+            _uiState.update {
+                it.copy(
+                    roleSwitchInFlight = false,
+                    currentRole = AppModule.authManager.getRole(),
+                )
+            }
+        }
     }
 
     fun setAvatar(id: Int) {
