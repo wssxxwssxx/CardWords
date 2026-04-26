@@ -9,6 +9,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
@@ -64,6 +65,17 @@ class CardWordsApiClient(
         client.get("$baseUrl/api/auth/me") {
             header("Authorization", bearerHeader(token))
         }.body()
+    }
+
+    suspend fun switchRole(token: String, role: String): Result<Unit> = runCatching {
+        val response = client.put("$baseUrl/api/auth/role") {
+            header("Authorization", bearerHeader(token))
+            contentType(ContentType.Application.Json)
+            setBody(SwitchRoleRequest(role))
+        }
+        if (response.status.value !in 200..299) {
+            error("HTTP ${response.status.value}")
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════

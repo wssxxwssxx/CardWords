@@ -33,6 +33,8 @@ data class UserResponse(
     val email: String,
     val name: String,
     @SerialName("subscription_status") val subscriptionStatus: String,
+    /** Nullable for users created before role was introduced */
+    val role: String? = null,
 )
 
 // ═══════════════════════════════════════════════════════════════
