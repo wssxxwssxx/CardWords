@@ -130,6 +130,42 @@ class CardWordsApiClient(
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // Teacher — students
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun listMyStudents(token: String): Result<List<StudentSummaryDto>> = runCatching {
+        val response = client.get("$baseUrl/api/teacher/students") {
+            header("Authorization", bearerHeader(token))
+        }
+        if (response.status.value !in 200..299) {
+            error("HTTP ${response.status.value}")
+        }
+        response.body<List<StudentSummaryDto>>()
+    }
+
+    suspend fun inviteStudent(token: String, email: String): Result<StudentSummaryDto> = runCatching {
+        val response = client.post("$baseUrl/api/teacher/students") {
+            header("Authorization", bearerHeader(token))
+            contentType(ContentType.Application.Json)
+            setBody(InviteStudentRequest(email))
+        }
+        if (response.status.value !in 200..299) {
+            error("HTTP ${response.status.value}")
+        }
+        response.body<StudentSummaryDto>()
+    }
+
+    suspend fun removeStudent(token: String, studentId: String): Result<Unit> = runCatching {
+        val response = client.delete("$baseUrl/api/teacher/students/$studentId") {
+            header("Authorization", bearerHeader(token))
+        }
+        // 404 = already gone (e.g., student removed via web), idempotent
+        if (response.status.value !in 200..299 && response.status.value != 404) {
+            error("HTTP ${response.status.value}")
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // Tests
     // ═══════════════════════════════════════════════════════════════
 
