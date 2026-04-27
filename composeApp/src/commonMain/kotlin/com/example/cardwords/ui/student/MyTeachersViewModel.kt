@@ -93,8 +93,8 @@ class MyTeachersViewModel : ViewModel() {
         AppModule.syncScope.launch {
             val result = apiClient.acceptCollection(token, collectionId)
             result.onSuccess {
-                // Persist new "last known" cards count
-                val target = previous.collections.firstOrNull { it.collection.id == collectionId }
+                // Persist new "last known" cards count from CURRENT state (may have been updated by a concurrent refresh)
+                val target = _uiState.value.collections.firstOrNull { it.collection.id == collectionId }
                 if (target != null) {
                     repository.setSetting("accepted_coll_$collectionId", target.collection.cardsCount.toString())
                 }

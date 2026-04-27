@@ -22,6 +22,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.cardwords.ui.components.cardBg
 import com.example.cardwords.ui.teaching.MyStudentsViewModel
+import com.example.cardwords.ui.teaching.StudentsPhase
 import com.example.cardwords.ui.theme.LightCard
 import com.example.cardwords.ui.theme.LightFg
 import com.example.cardwords.ui.theme.LightFgSecondary
@@ -42,7 +43,7 @@ fun AssignStudentSheet(
             Text("Назначить ученику", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = LightFg)
             Spacer(Modifier.height(12.dp))
             when {
-                state.phase.name == "LOADING" -> CircularProgressIndicator(modifier = Modifier.size(28.dp), color = LightFg, strokeWidth = 2.dp)
+                state.phase == StudentsPhase.LOADING -> CircularProgressIndicator(modifier = Modifier.size(28.dp), color = LightFg, strokeWidth = 2.dp)
                 state.students.isEmpty() -> Text("Сначала добавьте ученика во вкладке «Ученики»", fontSize = 13.sp, color = LightFgSecondary)
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),

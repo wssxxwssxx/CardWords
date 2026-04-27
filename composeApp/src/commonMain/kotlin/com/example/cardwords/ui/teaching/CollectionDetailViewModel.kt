@@ -137,8 +137,12 @@ class CollectionDetailViewModel(private val collectionId: String) : ViewModel() 
         _uiState.update { it.copy(assigning = true) }
         AppModule.syncScope.launch {
             val result = apiClient.assignCollection(token, collectionId, studentId)
-            _uiState.update { it.copy(assigning = false) }
-            if (result.isSuccess) onComplete()
+            if (result.isSuccess) {
+                _uiState.update { it.copy(assigning = false) }
+                onComplete()
+            } else {
+                _uiState.update { it.copy(assigning = false, error = "Не удалось назначить") }
+            }
         }
     }
 }
