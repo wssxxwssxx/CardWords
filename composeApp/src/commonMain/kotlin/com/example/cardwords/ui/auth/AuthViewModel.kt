@@ -141,7 +141,9 @@ class AuthViewModel : ViewModel() {
                                 email = response.user.email,
                                 name = response.user.name,
                                 subscription = response.user.subscriptionStatus,
-                                role = UserRole.fromWire(response.user.role),
+                                // Force RoleSelection on fresh registration — server defaults to "student"
+                                // but the user must explicitly pick their role.
+                                role = null,
                             )
                             syncCardsFromServer(response.accessToken)
                             _uiState.update { it.copy(phase = AuthPhase.SUCCESS) }
