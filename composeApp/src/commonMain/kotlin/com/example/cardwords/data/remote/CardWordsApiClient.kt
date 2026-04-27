@@ -16,7 +16,7 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
-class CardWordsApiClient(
+open class CardWordsApiClient(
     private val baseUrl: String = "http://64.188.60.84",
 ) {
     private val client = HttpClient {
@@ -67,7 +67,7 @@ class CardWordsApiClient(
         }.body()
     }
 
-    suspend fun switchRole(token: String, role: String): Result<Unit> = runCatching {
+    open suspend fun switchRole(token: String, role: String): Result<Unit> = runCatching {
         val response = client.put("$baseUrl/api/auth/role") {
             header("Authorization", bearerHeader(token))
             contentType(ContentType.Application.Json)
