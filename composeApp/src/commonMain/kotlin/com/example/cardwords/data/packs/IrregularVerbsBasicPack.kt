@@ -1,0 +1,65 @@
+package com.example.cardwords.data.packs
+
+import com.example.cardwords.data.model.PackLevel
+import com.example.cardwords.data.model.PackWord
+import com.example.cardwords.data.model.WordPack
+
+// Format:
+//   original    = infinitive (V1) — used for tests / letter-assembly / typing
+//   translation = "<russian> · V2 · V3" — shown on cards & in tooltips
+val IrregularVerbsBasicPack = WordPack(
+    id = "irregular_basic",
+    title = "Глаголы · Базовые",
+    subtitle = "Неправильные · A–L",
+    emoji = "🔤",
+    description = "Первая часть списка неправильных глаголов (A–L). Угадываете инфинитив, в карточках видите все 3 формы.",
+    level = PackLevel.SPECIAL,
+    words = listOf(
+        PackWord("be",      "быть · was/were · been",            "[biː]",       "A-L"),
+        PackWord("become",  "становиться · became · become",     "[bɪˈkʌm]",    "A-L"),
+        PackWord("bear",    "переносить · bore · born",          "[beə]",       "A-L"),
+        PackWord("beat",    "бить · beat · beaten",              "[biːt]",      "A-L"),
+        PackWord("begin",   "начинать · began · begun",          "[bɪˈɡɪn]",    "A-L"),
+        PackWord("bite",    "кусать · bit · bitten",             "[baɪt]",      "A-L"),
+        PackWord("break",   "ломать · broke · broken",           "[breɪk]",     "A-L"),
+        PackWord("bring",   "приносить · brought · brought",     "[brɪŋ]",      "A-L"),
+        PackWord("build",   "строить · built · built",           "[bɪld]",      "A-L"),
+        PackWord("burn",    "жечь · burnt · burnt",              "[bɜːn]",      "A-L"),
+        PackWord("buy",     "покупать · bought · bought",        "[baɪ]",       "A-L"),
+        PackWord("can",     "мочь · could · —",                  "[kæn]",       "A-L"),
+        PackWord("catch",   "ловить · caught · caught",          "[kætʃ]",      "A-L"),
+        PackWord("choose",  "выбирать · chose · chosen",         "[tʃuːz]",     "A-L"),
+        PackWord("come",    "приходить · came · come",           "[kʌm]",       "A-L"),
+        PackWord("cost",    "стоить · cost · cost",              "[kɒst]",      "A-L"),
+        PackWord("cut",     "резать · cut · cut",                "[kʌt]",       "A-L"),
+        PackWord("do",      "делать · did · done",               "[duː]",       "A-L"),
+        PackWord("draw",    "тянуть, рисовать · drew · drawn",   "[drɔː]",      "A-L"),
+        PackWord("dream",   "мечтать · dreamt · dreamt",         "[driːm]",     "A-L"),
+        PackWord("drink",   "пить · drank · drunk",              "[drɪŋk]",     "A-L"),
+        PackWord("drive",   "ехать · drove · driven",            "[draɪv]",     "A-L"),
+        PackWord("eat",     "есть · ate · eaten",                "[iːt]",       "A-L"),
+        PackWord("fall",    "падать · fell · fallen",            "[fɔːl]",      "A-L"),
+        PackWord("feel",    "чувствовать · felt · felt",         "[fiːl]",      "A-L"),
+        PackWord("fight",   "сражаться · fought · fought",       "[faɪt]",      "A-L"),
+        PackWord("find",    "находить · found · found",          "[faɪnd]",     "A-L"),
+        PackWord("fly",     "летать · flew · flown",             "[flaɪ]",      "A-L"),
+        PackWord("forget",  "забывать · forgot · forgotten",     "[fəˈɡet]",    "A-L"),
+        PackWord("forgive", "прощать · forgave · forgiven",      "[fəˈɡɪv]",    "A-L"),
+        PackWord("freeze",  "замораживать · froze · frozen",     "[friːz]",     "A-L"),
+        PackWord("get",     "получать · got · got",              "[ɡet]",       "A-L"),
+        PackWord("give",    "давать · gave · given",             "[ɡɪv]",       "A-L"),
+        PackWord("go",      "идти · went · gone",                "[ɡoʊ]",       "A-L"),
+        PackWord("grow",    "расти · grew · grown",              "[ɡroʊ]",      "A-L"),
+        PackWord("hang",    "висеть · hung · hung",              "[hæŋ]",       "A-L"),
+        PackWord("have",    "иметь · had · had",                 "[hæv]",       "A-L"),
+        PackWord("hear",    "слышать · heard · heard",           "[hɪə]",       "A-L"),
+        PackWord("hide",    "прятать · hid · hidden",            "[haɪd]",      "A-L"),
+        PackWord("hit",     "ударить · hit · hit",               "[hɪt]",       "A-L"),
+        PackWord("hold",    "держать · held · held",             "[hoʊld]",     "A-L"),
+        PackWord("hurt",    "ранить · hurt · hurt",              "[hɜːt]",      "A-L"),
+        PackWord("keep",    "хранить · kept · kept",             "[kiːp]",      "A-L"),
+        PackWord("know",    "знать · knew · known",              "[noʊ]",       "A-L"),
+        PackWord("lay",     "класть · laid · laid",              "[leɪ]",       "A-L"),
+        PackWord("lead",    "вести · led · led",                 "[liːd]",      "A-L"),
+    ),
+)

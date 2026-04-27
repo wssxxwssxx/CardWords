@@ -18,9 +18,22 @@ object AppModule {
     val databaseRepository: DatabaseRepository
         get() = _databaseRepository ?: error("AppModule not initialized. Call initialize() first.")
 
-    val cardWordsApiClient: CardWordsApiClient by lazy { CardWordsApiClient() }
+    private val _cardWordsApiClient: CardWordsApiClient by lazy { CardWordsApiClient() }
+    private var _cardWordsApiClientOverride: CardWordsApiClient? = null
 
-    val authManager: AuthManager by lazy { AuthManager(databaseRepository) }
+    val cardWordsApiClient: CardWordsApiClient
+        get() = _cardWordsApiClientOverride ?: _cardWordsApiClient
+
+    /**
+     * Test-only seam: override the API client used by [authManager] and ViewModels.
+     * Must be called BEFORE the first access to [authManager] (which captures
+     * [cardWordsApiClient] eagerly via `by lazy`).
+     */
+    fun setCardWordsApiClientForTesting(client: CardWordsApiClient) {
+        _cardWordsApiClientOverride = client
+    }
+
+    val authManager: AuthManager by lazy { AuthManager(databaseRepository, cardWordsApiClient) }
 
     /**
      * Application-lifetime scope for fire-and-forget server sync operations

@@ -75,3 +75,15 @@ data object StatsTabRoute
 
 @Serializable
 data object ProfileTabRoute
+
+@Serializable
+data object MyTeachersTabRoute
+
+@Serializable
+data object TeachingTabRoute
+
+@Serializable
+data object RoleSelectionRoute
+
+@Serializable
+data class CollectionDetailRoute(val collectionId: String)

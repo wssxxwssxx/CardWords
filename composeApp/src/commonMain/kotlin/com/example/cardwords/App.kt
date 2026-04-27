@@ -1,6 +1,8 @@
 package com.example.cardwords
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -8,9 +10,11 @@ import androidx.navigation.toRoute
 import com.example.cardwords.data.model.OnboardingManager
 import com.example.cardwords.di.AppModule
 import com.example.cardwords.navigation.AchievementsRoute
+import com.example.cardwords.navigation.CollectionDetailRoute
 import com.example.cardwords.navigation.MainRoute
 import com.example.cardwords.navigation.MixedStudyRoute
 import com.example.cardwords.navigation.OnboardingRoute
+import com.example.cardwords.navigation.RoleSelectionRoute
 import com.example.cardwords.navigation.StudyModeSelectionRoute
 import com.example.cardwords.navigation.StudyWordSettingsRoute
 import com.example.cardwords.navigation.PackDetailRoute
@@ -34,8 +38,10 @@ import com.example.cardwords.ui.packs.WordPacksScreen
 import com.example.cardwords.ui.achievements.AchievementsScreen
 import com.example.cardwords.ui.auth.AuthScreen
 import com.example.cardwords.ui.auth.AuthTab
+import com.example.cardwords.ui.auth.RoleSelectionScreen
 import com.example.cardwords.ui.game.dungeon.DungeonScreen
 import com.example.cardwords.ui.game.wordfall.WordFallScreen
+import com.example.cardwords.ui.teaching.CollectionDetailScreen
 import com.example.cardwords.ui.test.TestScreen
 import com.example.cardwords.ui.theme.CardWordsTheme
 
@@ -45,11 +51,13 @@ fun App() {
         val navController = rememberNavController()
         val repository = AppModule.databaseRepository
         val authManager = AppModule.authManager
+        val role by authManager.roleFlow.collectAsStateWithLifecycle()
 
         val startRoute: Any = when {
-            authManager.isLoggedIn() && OnboardingManager.isOnboardingCompleted(repository) -> MainRoute
-            authManager.isLoggedIn() -> OnboardingRoute
-            else -> WelcomeRoute
+            !authManager.isLoggedIn()                            -> WelcomeRoute
+            role == null                                         -> RoleSelectionRoute
+            !OnboardingManager.isOnboardingCompleted(repository) -> OnboardingRoute
+            else                                                 -> MainRoute
         }
 
         NavHost(
@@ -211,18 +219,38 @@ fun App() {
                 AuthScreen(
                     initialTab = if (route.initialTab == "register") AuthTab.REGISTER else AuthTab.LOGIN,
                     onAuthSuccess = {
-                        if (OnboardingManager.isOnboardingCompleted(repository)) {
-                            navController.navigate(MainRoute) {
-                                popUpTo(0) { inclusive = true }
-                            }
-                        } else {
-                            navController.navigate(OnboardingRoute) {
-                                popUpTo(0) { inclusive = true }
-                            }
+                        val next: Any = when {
+                            authManager.getRole() == null                        -> RoleSelectionRoute
+                            !OnboardingManager.isOnboardingCompleted(repository) -> OnboardingRoute
+                            else                                                 -> MainRoute
+                        }
+                        navController.navigate(next) {
+                            popUpTo(0) { inclusive = true }
                         }
                     },
                     onNavigateBack = {
                         navController.popBackStack()
+                    },
+                )
+            }
+
+            composable<RoleSelectionRoute> {
+                RoleSelectionScreen(
+                    onPicked = {
+                        val next: Any = if (OnboardingManager.isOnboardingCompleted(repository)) {
+                            MainRoute
+                        } else {
+                            OnboardingRoute
+                        }
+                        navController.navigate(next) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    onSessionExpired = {
+                        navController.navigate(AuthRoute(initialTab = "login")) {
+                            popUpTo<RoleSelectionRoute> { inclusive = true }
+                            launchSingleTop = true
+                        }
                     },
                 )
             }
@@ -243,6 +271,14 @@ fun App() {
                     onNavigateBack = {
                         navController.popBackStack()
                     },
+                )
+            }
+
+            composable<CollectionDetailRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<CollectionDetailRoute>()
+                CollectionDetailScreen(
+                    collectionId = route.collectionId,
+                    onNavigateBack = { navController.popBackStack() },
                 )
             }
         }

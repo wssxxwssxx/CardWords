@@ -33,6 +33,8 @@ data class UserResponse(
     val email: String,
     val name: String,
     @SerialName("subscription_status") val subscriptionStatus: String,
+    /** Nullable for users created before role was introduced */
+    val role: String? = null,
 )
 
 // ═══════════════════════════════════════════════════════════════
@@ -141,4 +143,93 @@ data class DayStats(
 data class HealthResponse(
     val status: String,
     val db: String,
+)
+
+// ═══════════════════════════════════════════════════════════════
+// Role
+// ═══════════════════════════════════════════════════════════════
+
+@Serializable
+data class SwitchRoleRequest(val role: String)
+
+// ═══════════════════════════════════════════════════════════════
+// Teacher / Student summaries
+// ═══════════════════════════════════════════════════════════════
+
+@Serializable
+data class StudentSummaryDto(
+    val id: String,
+    val email: String,
+    val name: String,
+    val status: String = "pending",
+)
+
+@Serializable
+data class TeacherSummaryDto(
+    val id: String,
+    val email: String,
+    val name: String,
+)
+
+@Serializable
+data class InviteStudentRequest(val email: String)
+
+// ═══════════════════════════════════════════════════════════════
+// Collections (teacher)
+// ═══════════════════════════════════════════════════════════════
+
+@Serializable
+data class CollectionDto(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    @SerialName("cards_count") val cardsCount: Int = 0,
+)
+
+@Serializable
+data class CollectionDetailDto(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    @SerialName("cards_count") val cardsCount: Int = 0,
+    val cards: List<CollectionCardDto> = emptyList(),
+)
+
+@Serializable
+data class CollectionCardDto(
+    val id: String,
+    @SerialName("word_original") val wordOriginal: String,
+    @SerialName("word_translation") val wordTranslation: String,
+)
+
+@Serializable
+data class CreateCollectionRequest(
+    val name: String,
+    val description: String,
+)
+
+@Serializable
+data class UpdateCollectionRequest(
+    val name: String,
+    val description: String,
+)
+
+@Serializable
+data class AddCollectionCardRequest(
+    @SerialName("word_original") val wordOriginal: String,
+    @SerialName("word_translation") val wordTranslation: String? = null,
+)
+
+// ═══════════════════════════════════════════════════════════════
+// Assigned collections (student side)
+// ═══════════════════════════════════════════════════════════════
+
+@Serializable
+data class AssignedCollectionDto(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    @SerialName("cards_count") val cardsCount: Int = 0,
+    @SerialName("teacher_name") val teacherName: String = "",
+    val status: String = "assigned",
 )
