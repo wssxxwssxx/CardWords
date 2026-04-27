@@ -36,6 +36,7 @@ private val DividerColor = Color(0xFFE5E5EA)
 @Composable
 fun RoleSelectionScreen(
     onPicked: () -> Unit,
+    onSessionExpired: () -> Unit,
 ) {
     val viewModel = remember { RoleSelectionViewModel() }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -70,14 +71,14 @@ fun RoleSelectionScreen(
             title = "Я — ученик",
             subtitle = "Учу слова, прохожу тесты",
             enabled = state.phase != RolePickPhase.SUBMITTING,
-            onClick = { viewModel.pickRole(UserRole.STUDENT, onPicked) },
+            onClick = { viewModel.pickRole(UserRole.STUDENT, onPicked, onSessionExpired) },
         )
         Spacer(Modifier.height(12.dp))
         RoleCard(
             title = "Я — преподаватель",
             subtitle = "Создаю коллекции, выдаю их ученикам",
             enabled = state.phase != RolePickPhase.SUBMITTING,
-            onClick = { viewModel.pickRole(UserRole.TEACHER, onPicked) },
+            onClick = { viewModel.pickRole(UserRole.TEACHER, onPicked, onSessionExpired) },
         )
 
         Spacer(Modifier.height(20.dp))

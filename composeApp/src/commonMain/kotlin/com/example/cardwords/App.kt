@@ -246,6 +246,11 @@ fun App() {
                             popUpTo(0) { inclusive = true }
                         }
                     },
+                    onSessionExpired = {
+                        navController.navigate(AuthRoute(initialTab = "login")) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
                 )
             }
 

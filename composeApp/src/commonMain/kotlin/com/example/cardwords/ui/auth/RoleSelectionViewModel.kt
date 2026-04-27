@@ -22,7 +22,7 @@ class RoleSelectionViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(RoleSelectionUiState())
     val uiState: StateFlow<RoleSelectionUiState> = _uiState.asStateFlow()
 
-    fun pickRole(role: UserRole, onSuccess: () -> Unit) {
+    fun pickRole(role: UserRole, onSuccess: () -> Unit, onSessionExpired: () -> Unit) {
         if (_uiState.value.phase == RolePickPhase.SUBMITTING) return
         _uiState.value = RoleSelectionUiState(phase = RolePickPhase.SUBMITTING)
         viewModelScope.launch {
@@ -30,10 +30,17 @@ class RoleSelectionViewModel : ViewModel() {
             result.fold(
                 onSuccess = { onSuccess() },
                 onFailure = { e ->
-                    _uiState.value = RoleSelectionUiState(
-                        phase = RolePickPhase.ERROR,
-                        error = mapError(e.message),
-                    )
+                    val raw = e.message
+                    if (raw?.contains("401") == true) {
+                        // Token expired — log out and bounce to login. UI can't recover here.
+                        authManager.logout()
+                        onSessionExpired()
+                    } else {
+                        _uiState.value = RoleSelectionUiState(
+                            phase = RolePickPhase.ERROR,
+                            error = mapError(raw),
+                        )
+                    }
                 },
             )
         }
