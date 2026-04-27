@@ -248,7 +248,8 @@ fun App() {
                     },
                     onSessionExpired = {
                         navController.navigate(AuthRoute(initialTab = "login")) {
-                            popUpTo(0) { inclusive = true }
+                            popUpTo<RoleSelectionRoute> { inclusive = true }
+                            launchSingleTop = true
                         }
                     },
                 )
