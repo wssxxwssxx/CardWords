@@ -8,6 +8,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -148,6 +149,16 @@ open class CardWordsApiClient(
             header("Authorization", bearerHeader(token))
             contentType(ContentType.Application.Json)
             setBody(InviteStudentRequest(email))
+        }
+        if (response.status.value !in 200..299) {
+            error("HTTP ${response.status.value}")
+        }
+        response.body<StudentSummaryDto>()
+    }
+
+    suspend fun activateStudent(token: String, studentId: String): Result<StudentSummaryDto> = runCatching {
+        val response = client.patch("$baseUrl/api/teacher/students/$studentId/activate") {
+            header("Authorization", bearerHeader(token))
         }
         if (response.status.value !in 200..299) {
             error("HTTP ${response.status.value}")

@@ -161,7 +161,7 @@ data class StudentSummaryDto(
     val id: String,
     val email: String,
     val name: String,
-    @SerialName("cards_count") val cardsCount: Int = 0,
+    val status: String = "pending",
 )
 
 @Serializable

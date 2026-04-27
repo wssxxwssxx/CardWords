@@ -28,7 +28,7 @@ data class StudentSummary(
     val id: String,
     val email: String,
     val name: String,
-    val cardsCount: Int,
+    val status: StudentStatus,
 )
 
 @Immutable
@@ -37,6 +37,17 @@ data class TeacherSummary(
     val email: String,
     val name: String,
 )
+
+@Immutable
+enum class StudentStatus { PENDING, ACTIVE;
+
+    companion object {
+        fun fromWire(value: String?): StudentStatus = when (value?.lowercase()) {
+            "active" -> ACTIVE
+            else -> PENDING // safe default for unknown / missing
+        }
+    }
+}
 
 @Immutable
 enum class AssignmentStatus { ASSIGNED, ADDED;

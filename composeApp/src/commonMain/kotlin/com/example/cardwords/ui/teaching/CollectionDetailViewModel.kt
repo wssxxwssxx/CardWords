@@ -41,7 +41,7 @@ class CollectionDetailViewModel(private val collectionId: String) : ViewModel() 
             result.fold(
                 onSuccess = { dto ->
                     val detail = CollectionDetail(
-                        collection = Collection(dto.id, dto.name, dto.description, dto.cardsCount),
+                        collection = Collection(dto.id, dto.name, dto.description, dto.cards.size),
                         cards = dto.cards.map { CollectionCard(it.id, it.wordOriginal, it.wordTranslation) },
                     )
                     _uiState.update { it.copy(phase = DetailPhase.CONTENT, detail = detail) }

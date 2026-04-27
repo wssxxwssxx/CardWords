@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.cardwords.data.model.StudentStatus
 import com.example.cardwords.data.model.StudentSummary
 import com.example.cardwords.ui.components.PullRefresh
 import com.example.cardwords.ui.components.cardBg
@@ -69,7 +70,13 @@ fun StudentsTab(viewModel: MyStudentsViewModel) {
                             item { EmptyHint() }
                         } else {
                             items(state.students, key = { it.id }) { student ->
-                                StudentRow(student, removing = student.id in state.removingIds, onRemove = { viewModel.removeStudent(student.id) })
+                                StudentRow(
+                                    student,
+                                    removing = student.id in state.removingIds,
+                                    activating = student.id in state.activatingIds,
+                                    onActivate = { viewModel.activate(student.id) },
+                                    onRemove = { viewModel.removeStudent(student.id) },
+                                )
                             }
                         }
                         item { Spacer(Modifier.height(24.dp)) }
@@ -99,15 +106,34 @@ private fun EmptyHint() {
 }
 
 @Composable
-private fun StudentRow(student: StudentSummary, removing: Boolean, onRemove: () -> Unit) {
+private fun StudentRow(
+    student: StudentSummary,
+    removing: Boolean,
+    activating: Boolean,
+    onActivate: () -> Unit,
+    onRemove: () -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth().cardBg(LightCard, DividerColor, 0.5.dp, 14.dp).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(student.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = LightFg)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(student.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = LightFg)
+                Spacer(Modifier.width(8.dp))
+                StatusChip(student.status)
+            }
             Spacer(Modifier.height(2.dp))
-            Text("${student.email} · ${student.cardsCount} карточек", fontSize = 12.sp, color = LightFgSecondary)
+            Text(student.email, fontSize = 12.sp, color = LightFgSecondary)
+        }
+        if (student.status == StudentStatus.PENDING && !activating) {
+            Box(
+                modifier = Modifier.clickable(onClick = onActivate).padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text("Активировать", fontSize = 12.sp, color = LightFg, fontWeight = FontWeight.SemiBold)
+            }
+        } else if (activating) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp).padding(horizontal = 4.dp), strokeWidth = 1.5.dp, color = LightFgSecondary)
         }
         if (!removing) {
             Box(
@@ -118,5 +144,21 @@ private fun StudentRow(student: StudentSummary, removing: Boolean, onRemove: () 
         } else {
             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 1.5.dp, color = LightFgSecondary)
         }
+    }
+}
+
+@Composable
+private fun StatusChip(status: StudentStatus) {
+    val (bg, fg, label) = when (status) {
+        StudentStatus.PENDING -> Triple(Color(0xFFFFF3CD), Color(0xFF8B6914), "Приглашён")
+        StudentStatus.ACTIVE  -> Triple(Color(0xFFE3F8E1), Color(0xFF2D6A33), "Активен")
+    }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+    ) {
+        Text(label, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = fg)
     }
 }

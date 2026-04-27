@@ -2,6 +2,7 @@ package com.example.cardwords.ui.teaching
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cardwords.data.model.StudentStatus
 import com.example.cardwords.data.model.StudentSummary
 import com.example.cardwords.di.AppModule
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,7 @@ data class MyStudentsUiState(
     val inviteInFlight: Boolean = false,
     val inviteError: String? = null,
     val removingIds: Set<String> = emptySet(),
+    val activatingIds: Set<String> = emptySet(),
 )
 
 class MyStudentsViewModel : ViewModel() {
@@ -41,7 +43,7 @@ class MyStudentsViewModel : ViewModel() {
                 onSuccess = { list ->
                     _uiState.update { it.copy(
                         phase = StudentsPhase.CONTENT,
-                        students = list.map { dto -> StudentSummary(dto.id, dto.email, dto.name, dto.cardsCount) },
+                        students = list.map { dto -> StudentSummary(dto.id, dto.email, dto.name, StudentStatus.fromWire(dto.status)) },
                     ) }
                 },
                 onFailure = {
@@ -70,7 +72,7 @@ class MyStudentsViewModel : ViewModel() {
                         state.copy(
                             inviteInFlight = false,
                             inviteError = null,
-                            students = state.students + StudentSummary(dto.id, dto.email, dto.name, dto.cardsCount),
+                            students = state.students + StudentSummary(dto.id, dto.email, dto.name, StudentStatus.fromWire(dto.status)),
                         )
                     }
                     onComplete()
@@ -101,6 +103,27 @@ class MyStudentsViewModel : ViewModel() {
                 _uiState.update { it.copy(students = previous, error = "Не удалось удалить") }
             }
             _uiState.update { it.copy(removingIds = it.removingIds - id) }
+        }
+    }
+
+    fun activate(id: String) {
+        if (id in _uiState.value.activatingIds) return
+        val token = authManager.getToken() ?: return
+        val previous = _uiState.value.students
+        _uiState.update { state ->
+            state.copy(
+                activatingIds = state.activatingIds + id,
+                students = state.students.map { s ->
+                    if (s.id == id) s.copy(status = StudentStatus.ACTIVE) else s
+                },
+            )
+        }
+        AppModule.syncScope.launch {
+            val result = apiClient.activateStudent(token, id)
+            if (result.isFailure) {
+                _uiState.update { it.copy(students = previous, error = "Не удалось активировать") }
+            }
+            _uiState.update { it.copy(activatingIds = it.activatingIds - id) }
         }
     }
 
